@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · DevTools Web{% endblock %}
+{% block content %}
+<h1>{{ code }}</h1>
+<p>{{ message }}</p>
+<p><a href="{{ url_for('main.index') }}">← Back to tools</a></p>
+{% endblock %}

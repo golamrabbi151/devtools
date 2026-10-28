@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#12685d">
+  <meta name="robots" content="noindex">
+  <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true},{"code":"...","swap":false}]}'>
+  <title>{% block title %}DevTools Web{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2312685d'/%3E%3Ctext x='16' y='21' font-family='monospace' font-size='15' font-weight='700' text-anchor='middle' fill='%23e3eddb'%3E%7B %7D%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <button type="button" id="nav-toggle" class="icon-btn" aria-controls="sidebar" aria-expanded="true" aria-label="Toggle menu">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+        <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <a class="brand" href="{{ url_for('main.index') }}"><span class="logo" aria-hidden="true">{ }</span> DevTools Web</a>
+    <span class="topbar-note">Processed in memory · never stored</span>
+  </header>
+
+  <div class="layout">
+    <nav id="sidebar" class="sidebar" aria-label="Tools">
+      {% set ns = namespace(group=None) %}
+      {% for t in tools %}
+        {% if t.group != ns.group %}
+          {% set ns.group = t.group %}<div class="group">{{ t.group }}</div>
+        {% endif %}
+        <a href="{{ url_for('main.tool_page', slug=t.slug) }}"
+           class="{{ 'active' if t.slug == active }}"{% if t.slug == active %} aria-current="page"{% endif %}>{{ t.title }}</a>
+      {% endfor %}
+    </nav>
+    <div id="scrim" class="scrim" hidden></div>
+    <main class="content">{% block content %}{% endblock %}</main>
+  </div>
+</body>
+</html>

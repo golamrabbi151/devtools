@@ -1,0 +1,24 @@
+{# result.html / result.block are Markup objects built from escaped tokens (app/highlight.py,
+   tool modules) - rendered without |safe. #}
+{% set ext = tool.ext if (tool is defined and tool) else "txt" %}
+{% if error %}
+  <div class="error" role="alert">{{ error }}</div>
+{% elif result %}
+  {% for n in result.notes %}<div class="note">{{ n }}</div>{% endfor %}
+  {% if result.image %}<img class="preview zoomable" src="{{ result.image }}" alt="Generated image" tabindex="0" title="Click to enlarge">{% endif %}
+  {% if result.block %}
+    {{ result.block }}
+    {% if result.output %}<pre id="out" class="sr-only" hidden>{{ result.output }}</pre>{% endif %}
+  {% elif result.output %}
+    {% set lines = [result.output.count("\n") + 1, 20000] | min %}
+    <div class="out-bar">
+      <button type="button" class="tool-btn" data-copy="#out">Copy</button>
+      <button type="button" class="tool-btn" data-download="#out" data-filename="result.{{ ext }}">Download</button>
+      <span class="muted small">{{ lines }} line{{ 's' if lines != 1 }} · {{ '{:,}'.format(result.output | length) }} chars</span>
+    </div>
+    <div class="editor out">
+      <pre class="gutter" aria-hidden="true">{{ range(1, lines + 1) | join("\n") }}</pre>
+      <pre id="out" class="hl">{% if result.html %}{{ result.html }}{% else %}{{ result.output }}{% endif %}</pre>
+    </div>
+  {% endif %}
+{% endif %}

@@ -1,0 +1,14 @@
+Flask>=3.0,<4
+Flask-WTF>=1.2,<2
+Flask-Limiter>=3.5,<4
+gunicorn>=22
+defusedxml>=0.7.1
+sqlparse>=0.5
+cryptography>=42
+cronsim>=2.5
+cron-descriptor>=1.4
+segno>=1.6
+Pillow>=10.3
+numpy>=1.26
+opencv-python-headless>=4.9
+openpyxl>=3.1

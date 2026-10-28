@@ -1,0 +1,61 @@
+{# Reusable form pieces. Everything is autoescaped; no inline styles or scripts (CSP). #}
+
+{% macro editor(f) -%}
+<div class="editor" data-editor>
+  <pre class="gutter" aria-hidden="true">1</pre>
+  <textarea id="f-{{ f.name }}" name="{{ f.name }}" wrap="off" spellcheck="false" autocomplete="off"
+            autocapitalize="off" placeholder="{{ f.placeholder }}" aria-label="{{ f.label }}">{{ f.default }}</textarea>
+</div>
+{%- endmacro %}
+
+{# Compact inline option (toolbar). #}
+{% macro opt(f) -%}
+  {% if f.kind == "checkbox" -%}
+    <label class="opt check"><input type="checkbox" name="{{ f.name }}" {{ 'checked' if f.default == 'on' }}> {{ f.label }}</label>
+  {%- elif f.kind == "select" -%}
+    <label class="opt"><span>{{ f.label }}</span>
+      <select id="f-{{ f.name }}" name="{{ f.name }}">
+        {% for v, l in f.options %}<option value="{{ v }}" {{ 'selected' if v == f.default }}>{{ l }}</option>{% endfor %}
+      </select></label>
+  {%- elif f.kind == "number" -%}
+    <label class="opt"><span>{{ f.label }}</span>
+      <input id="f-{{ f.name }}" type="number" name="{{ f.name }}" value="{{ f.default }}"
+             {% if f.lo is not none %}min="{{ f.lo }}"{% endif %} {% if f.hi is not none %}max="{{ f.hi }}"{% endif %}></label>
+  {%- else -%}
+    <label class="opt"><span>{{ f.label }}</span>
+      <input id="f-{{ f.name }}" type="text" name="{{ f.name }}" value="{{ f.default }}"
+             placeholder="{{ f.placeholder }}" autocomplete="off" spellcheck="false"></label>
+  {%- endif %}
+{%- endmacro %}
+
+{# Stacked field for the generic "form" layout. #}
+{% macro stacked(f, upload_limit=0) -%}
+  {% if f.kind == "checkbox" -%}
+    <label class="check"><input type="checkbox" name="{{ f.name }}" {{ 'checked' if f.default == 'on' }}> {{ f.label }}</label>
+  {%- else -%}
+    <label for="f-{{ f.name }}">{{ f.label }}</label>
+    {% if f.kind == "textarea" -%}
+      <textarea id="f-{{ f.name }}" name="{{ f.name }}" spellcheck="false" autocomplete="off"
+                placeholder="{{ f.placeholder }}" rows="{{ 6 if f.default else 10 }}">{{ f.default }}</textarea>
+    {%- elif f.kind == "select" -%}
+      <select id="f-{{ f.name }}" name="{{ f.name }}">
+        {% for v, l in f.options %}<option value="{{ v }}" {{ 'selected' if v == f.default }}>{{ l }}</option>{% endfor %}
+      </select>
+    {%- elif f.kind == "number" -%}
+      <input id="f-{{ f.name }}" type="number" name="{{ f.name }}" value="{{ f.default }}"
+             {% if f.lo is not none %}min="{{ f.lo }}"{% endif %} {% if f.hi is not none %}max="{{ f.hi }}"{% endif %}>
+    {%- elif f.kind == "file" -%}
+      <input id="f-{{ f.name }}" type="file" name="{{ f.name }}" accept="{{ f.accept }}" data-max-bytes="{{ upload_limit }}">
+      <p class="hint">Max file size: {{ '{:g}'.format(upload_limit / 1048576) }} MB. Files are checked for malware-style tricks, processed in memory and never stored or executed.</p>
+    {%- else -%}
+      <input id="f-{{ f.name }}" type="text" name="{{ f.name }}" value="{{ f.default }}"
+             placeholder="{{ f.placeholder }}" autocomplete="off" spellcheck="false">
+    {%- endif %}
+  {%- endif %}
+{%- endmacro %}
+
+{# Panel header buttons shared by split / compare layouts. #}
+{% macro open_file(field, tool) -%}
+  <button type="button" class="tool-btn" data-open="#open-{{ field.name }}">Open file</button>
+  <input type="file" id="open-{{ field.name }}" data-load="#f-{{ field.name }}" accept=".{{ tool.ext }},.json,.txt,text/plain" hidden>
+{%- endmacro %}

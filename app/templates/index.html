@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Developer tools</h1>
+<p class="muted">Pick a tool. Everything runs on this server; nothing is saved.</p>
+<div class="cards">
+  {% for t in tools %}
+  <a class="card" href="{{ url_for('main.tool_page', slug=t.slug) }}">
+    <strong>{{ t.title }}</strong><span>{{ t.description }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

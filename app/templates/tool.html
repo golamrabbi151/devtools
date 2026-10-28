@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% from "_macros.html" import editor, opt, stacked, open_file %}
+{% block title %}{{ tool.title }} · DevTools Web{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ tool.title }}</h1>
+  <p class="muted">{{ tool.description }}</p>
+</div>
+
+<form id="tool-form" class="tool-form lay-{{ tool.layout }}" method="post"
+      hx-post="{{ url_for('main.tool_run', slug=tool.slug) }}"
+      hx-target="#result" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#spinner"
+      {%- if tool.live %} hx-trigger="submit, load, input changed delay:600ms from:#f-{{ tool.live }}"{% endif %}>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+{% if tool.layout == "split" %}
+  {# ---------- JSON / XML / SQL: input pane | output pane ---------- #}
+  {% set main = (tool.fields | selectattr("kind", "equalto", "textarea") | list)[0] %}
+  <div class="toolbar">
+    <div class="toolbar-actions">
+      {% for a in tool.actions %}
+        <button type="submit" name="action" value="{{ a.name }}" class="{{ 'primary' if a.primary }}">{{ a.label }}</button>
+      {% endfor %}
+      <span id="spinner" class="htmx-indicator">Working…</span>
+    </div>
+    <div class="toolbar-opts">
+      {% for f in tool.fields if f.name != main.name %}{{ opt(f) }}{% endfor %}
+    </div>
+  </div>
+  <div class="split">
+    <section class="panel">
+      <header class="panel-head">
+        <h2>{{ main.label }}</h2>
+        <div class="head-tools">
+          {% if tool.sample %}<button type="button" class="tool-btn" data-sample='{{ tool.sample | tojson }}'>Sample</button>{% endif %}
+          {{ open_file(main, tool) }}
+          <button type="button" class="tool-btn" data-clear-field="#f-{{ main.name }}">Clear</button>
+        </div>
+      </header>
+      {{ editor(main) }}
+    </section>
+    <section class="panel" aria-live="polite">
+      <header class="panel-head"><h2>Output</h2></header>
+      <div id="result" class="result"><p class="muted pad">Output appears here.</p></div>
+    </section>
+  </div>
+
+{% elif tool.layout == "compare" %}
+  {# ---------- JSON compare: left | [Compare] | right, diff below ---------- #}
+  {% set areas = tool.fields | selectattr("kind", "equalto", "textarea") | list %}
+  <div class="compare-grid">
+    {% for f in areas %}
+      {% if loop.index == 2 %}
+      <div class="compare-mid">
+        <button type="submit" name="action" value="{{ tool.actions[0].name }}" class="primary big">{{ tool.actions[0].label }}</button>
+        {% for o in tool.fields if o.kind != "textarea" %}{{ opt(o) }}{% endfor %}
+        {% if tool.sample %}<button type="button" class="tool-btn" data-sample='{{ tool.sample | tojson }}'>Sample</button>{% endif %}
+        <button type="button" class="tool-btn" data-clear-field="#f-{{ areas[0].name }},#f-{{ areas[1].name }}">Clear all</button>
+        <span id="spinner" class="htmx-indicator">Working…</span>
+      </div>
+      {% endif %}
+      <section class="panel">
+        <header class="panel-head">
+          <h2>{{ f.label }}</h2>
+          <div class="head-tools">
+            {{ open_file(f, tool) }}
+            <button type="button" class="tool-btn" data-clear-field="#f-{{ f.name }}">Clear</button>
+          </div>
+        </header>
+        {{ editor(f) }}
+      </section>
+    {% endfor %}
+  </div>
+  <section class="panel result-panel" aria-live="polite">
+    <header class="panel-head">
+      <h2>Differences</h2>
+      <div class="head-tools"><button type="button" class="tool-btn" data-copy="#out">Copy report</button></div>
+    </header>
+    <div id="result" class="result"><p class="muted pad">Click <strong>Compare</strong> to see added, removed and changed values.</p></div>
+  </section>
+
+{% elif tool.layout == "cron" %}
+  {# ---------- Cron: big expression box, presets, breakdown ---------- #}
+  {% set expr = tool.fields[0] %}
+  <div class="cron-hero">
+    <label for="f-{{ expr.name }}" class="sr-only">{{ expr.label }}</label>
+    <input id="f-{{ expr.name }}" class="cron-input" type="text" name="{{ expr.name }}" value="{{ expr.default }}"
+           placeholder="{{ expr.placeholder }}" maxlength="{{ expr.max_len }}" autocomplete="off" spellcheck="false" autocapitalize="off">
+    <button type="submit" name="action" value="{{ tool.actions[0].name }}" class="primary big">{{ tool.actions[0].label }}</button>
+  </div>
+  <div class="chips" role="group" aria-label="Examples">
+    {% for label, value in tool.presets %}
+      <button type="button" class="chip" data-fill="{{ value }}" data-target="#f-{{ expr.name }}" title="{{ value }}">{{ label }}</button>
+    {% endfor %}
+  </div>
+  <div class="toolbar">
+    <div class="toolbar-opts">
+      {% for f in tool.fields[1:] %}{{ opt(f) }}{% endfor %}
+      <span id="spinner" class="htmx-indicator">Working…</span>
+    </div>
+  </div>
+  <section class="panel" aria-live="polite">
+    <div id="result" class="result pad"><p class="muted">Parsing…</p></div>
+  </section>
+
+{% else %}
+  {# ---------- Generic stacked form ---------- #}
+  <div class="pane">
+    {% for f in tool.fields %}{{ stacked(f, upload_limit) }}{% endfor %}
+    <div class="actions">
+      {% for a in tool.actions %}
+        <button type="submit" name="action" value="{{ a.name }}" class="{{ 'primary' if a.primary }}">{{ a.label }}</button>
+      {% endfor %}
+      <button type="reset" class="ghost" data-clear>Clear</button>
+      <span id="spinner" class="htmx-indicator">Working…</span>
+    </div>
+  </div>
+  <section class="pane" aria-live="polite">
+    <label>Result</label>
+    <div id="result"><p class="muted">Output appears here.</p></div>
+  </section>
+{% endif %}
+</form>
+{% endblock %}
