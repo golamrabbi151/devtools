@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base sign-in · DevTools Web{% endblock %}
+{% block topnote %}Knowledge base · stored on this server{% endblock %}
+{% block content %}
+<div class="kb-login pane">
+  <h1>Security Knowledge Base</h1>
+  {% if disabled %}
+    <p>The knowledge base is disabled on this server.</p>
+    <p class="muted">An administrator must set the <code>KB_PASSWORD</code> environment variable to enable it.</p>
+  {% else %}
+    <p class="muted">VA / PT findings and incident solutions are sensitive. Sign in to continue.</p>
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('kb.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label for="kb-password">Password</label>
+      <input id="kb-password" type="password" name="password" autocomplete="current-password" required autofocus>
+      <div class="actions"><button type="submit" class="primary">Sign in</button></div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

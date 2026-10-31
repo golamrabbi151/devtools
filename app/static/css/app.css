@@ -203,3 +203,79 @@ table.runs tr:nth-child(odd) td { background: var(--mist-2); }
 }
 
 .hint { margin: 5px 0 0; font-size: 12px; color: var(--muted); }
+
+/* ---------- security knowledge base ---------- */
+.kb-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.kb-head-actions { display: flex; gap: 8px; align-items: center; }
+.kb-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kb-stats div { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; }
+.kb-stats strong { font-size: 22px; line-height: 1.2; }
+.kb-stats span { color: var(--muted); font-size: 12.5px; }
+.kb-stats .crit strong { color: #9b1c1c; }
+.kb-filters { background: var(--mist); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.kb-search { display: flex; gap: 8px; align-items: center; }
+.kb-search input[type=search] { flex: 1; min-width: 0; padding: 11px 14px; font-size: 16px; border-radius: 10px;
+  border: 2px solid var(--brand); background: var(--panel); color: var(--ink); font-family: inherit; }
+.kb-filter-row { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; align-items: center; }
+.kb-filter-row select { max-width: 200px; }
+.kb-summary { margin: 4px 2px 8px; font-size: 13px; min-height: 1.2em; }
+.kb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kb-item { display: block; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+  text-decoration: none; color: var(--ink); }
+.kb-item:hover, .kb-item:focus-visible { border-color: var(--brand); background: var(--mist-2); }
+.kb-item-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.kb-date { margin-left: auto; }
+.kb-title { font-weight: 700; font-size: 16px; margin: 6px 0 2px; color: var(--ink); }
+.kb-ref { font: 600 12.5px var(--mono); color: var(--muted); }
+.kb-snippet { color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.kb-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; align-items: center; }
+mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--mist-2); border: 1px solid var(--border);
+  font-size: 12px; color: var(--ink); margin: 0 4px 2px 0; }
+.tag.tech { background: #e0eefb; border-color: #bdd7f0; color: #0b4a75; }
+.badge.kind { background: var(--mist); color: var(--ink); }
+.badge.solved { background: #dcf3e2; color: #14532d; }
+.sev-critical { background: #7f1d1d; color: #fff; } .sev-high { background: #fde2e2; color: #8f1d1d; }
+.sev-medium { background: #fdf0c8; color: #6b4300; } .sev-low { background: #e0eefb; color: #0b4a75; } .sev-info { background: #eceff1; color: #37474f; }
+.st-open { background: #fde2e2; color: #8f1d1d; } .st-in_progress { background: #fdf0c8; color: #6b4300; }
+.st-resolved, .st-mitigated { background: #dcf3e2; color: #14532d; } .st-accepted { background: #eceff1; color: #37474f; }
+.kb-empty { background: var(--panel); border: 1px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; }
+.kb-empty p { margin: 4px 0; }
+.kb-pager { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+
+.kb-modal { width: min(920px, 96vw); max-height: 92vh; padding: 0; border: 1px solid var(--border); border-radius: 16px;
+  background: var(--panel); color: var(--ink); box-shadow: 0 20px 60px rgba(24,59,53,.35); overflow: auto; }
+.kb-modal::backdrop { background: rgba(24,59,53,.55); }
+.kb-detail, .kb-form { padding: 0 20px 18px; }
+.kb-modal-head { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  background: var(--panel); padding: 16px 0 10px; border-bottom: 1px solid var(--mist); }
+.kb-modal-head h2 { margin: 6px 0 0; font-size: 20px; }
+.kb-close { color: var(--ink); font-size: 24px; flex: none; }
+.kb-close:hover { background: var(--mist); }
+.kb-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 16px; margin: 14px 0; }
+.kb-facts dt { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.kb-facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.kb-sec { margin-top: 14px; }
+.kb-sec h3 { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 0 0 6px; color: var(--brand);
+  text-transform: uppercase; letter-spacing: .05em; }
+.kb-text { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--mist-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+.kb-solution .kb-text { background: #f1faf3; border-color: #b9e2c4; font-family: var(--mono); font-size: 13px; }
+.kb-links, .kb-related { margin: 0; padding-left: 18px; }
+.kb-links li, .kb-related li { margin: 3px 0; overflow-wrap: anywhere; }
+.kb-modal-foot { display: flex; gap: 8px; align-items: center; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--mist); }
+.kb-modal-foot form { margin: 0; }
+.kb-modal-foot > :last-child { margin-left: auto; }
+button.danger { color: var(--err); border-color: #f0c4c4; }
+button.danger:hover { background: var(--err-bg); }
+.kb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.kb-grid .span-2 { grid-column: span 2; }
+.kb-form input[type=date] { width: 100%; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--border); font: inherit; color: var(--ink); }
+.kb-form .error { margin: 12px 0 0; }
+.kb-login { max-width: 440px; margin: 40px auto; }
+.kb-login input[type=password] { width: 100%; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--border); font: inherit; }
+@media (max-width: 700px) {
+  .kb-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kb-grid { grid-template-columns: 1fr; } .kb-grid .span-2 { grid-column: auto; }
+  .kb-search { flex-wrap: wrap; }
+}

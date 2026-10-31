@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base · DevTools Web{% endblock %}
+{% block topnote %}Knowledge base · stored on this server{% endblock %}
+{% block content %}
+<div class="page-head kb-head">
+  <div>
+    <h1>Security Knowledge Base</h1>
+    <p class="muted">VA / PT findings and incidents with their solutions. Search before you fix: it may have been solved before.</p>
+  </div>
+  <div class="kb-head-actions">
+    <button type="button" class="primary" hx-get="{{ url_for('kb.new') }}" hx-target="#kb-modal-body">+ New record</button>
+    <form method="post" action="{{ url_for('kb.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="ghost">Sign out</button>
+    </form>
+  </div>
+</div>
+
+<div class="kb-stats">
+  <div><strong>{{ stats.total }}</strong><span>records</span></div>
+  <div><strong>{{ stats.solved }}</strong><span>with a solution</span></div>
+  <div><strong>{{ stats.open }}</strong><span>open / in progress</span></div>
+  <div class="{{ 'crit' if stats.critical_open }}"><strong>{{ stats.critical_open }}</strong><span>critical &amp; open</span></div>
+</div>
+
+<form id="kb-filters" class="kb-filters" method="get" action="{{ url_for('kb.index') }}"
+      hx-get="{{ url_for('kb.index') }}" hx-target="#kb-results" hx-replace-url="true" hx-indicator="#kb-spinner"
+      hx-trigger="submit, input changed delay:300ms from:#kb-q, change from:#kb-filters select, change from:#kb-filters input[type=checkbox]">
+  <div class="kb-search">
+    <label for="kb-q" class="sr-only">Search</label>
+    <input id="kb-q" type="search" name="q" value="{{ params.get('q', '') }}" maxlength="300" autocomplete="off" spellcheck="false"
+           placeholder='Search title, CVE, technology, error, solution…  e.g. log4j  "sql injection"  CVE-2021-44228' autofocus>
+    <button type="submit" class="primary">Search</button>
+    <span id="kb-spinner" class="htmx-indicator">Searching…</span>
+  </div>
+  <div class="kb-filter-row">
+    <label class="opt"><span>Type</span>
+      <select name="kind"><option value="">All</option>
+        {% for v, l in kb.KINDS %}<option value="{{ v }}" {{ 'selected' if params.get('kind') == v }}>{{ l }}</option>{% endfor %}
+      </select></label>
+    <label class="opt"><span>Technology</span>
+      <select name="tech"><option value="">All</option>
+        {% for t in techs %}<option value="{{ t }}" {{ 'selected' if params.get('tech', '')|lower == t|lower }}>{{ t }}</option>{% endfor %}
+      </select></label>
+    <label class="opt"><span>Severity</span>
+      <select name="severity"><option value="">All</option>
+        {% for v, l in kb.SEVERITIES %}<option value="{{ v }}" {{ 'selected' if params.get('severity') == v }}>{{ l }}</option>{% endfor %}
+      </select></label>
+    <label class="opt"><span>Status</span>
+      <select name="status"><option value="">All</option>
+        <option value="unresolved" {{ 'selected' if params.get('status') == 'unresolved' }}>Open + in progress</option>
+        {% for v, l in kb.STATUSES %}<option value="{{ v }}" {{ 'selected' if params.get('status') == v }}>{{ l }}</option>{% endfor %}
+      </select></label>
+    <label class="opt"><span>Sort</span>
+      <select name="sort">
+        {% for v, l in kb.SORTS %}<option value="{{ v }}" {{ 'selected' if params.get('sort', 'relevance') == v }}>{{ l }}</option>{% endfor %}
+      </select></label>
+    <label class="opt check"><input type="checkbox" name="has_solution" {{ 'checked' if params.get('has_solution') == 'on' }}> Has solution</label>
+  </div>
+</form>
+
+<div id="kb-results" hx-get="{{ url_for('kb.index') }}" hx-include="#kb-filters" hx-trigger="kb-changed from:body" aria-live="polite">
+  {% include "_kb_list.html" %}
+</div>
+
+<dialog id="kb-modal" class="kb-modal" aria-label="Record details" {% if modal %}data-autoopen{% endif %}>
+  <div id="kb-modal-body">{% if modal %}{{ modal }}{% endif %}</div>
+</dialog>
+{% endblock %}

@@ -1,0 +1,94 @@
+{# Create / edit form, shown in the modal. `form` is the record (edit), the rejected POST (error) or {} (new). #}
+{% set v = form %}
+<form class="kb-form" hx-post="{{ url_for('kb.save') }}" hx-target="#kb-modal-body">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if rec %}<input type="hidden" name="id" value="{{ rec.id }}">{% endif %}
+  <header class="kb-modal-head">
+    <h2>{{ 'Edit record #' ~ rec.id if rec else 'New record' }}</h2>
+    <button type="button" class="icon-btn kb-close" data-kb-close aria-label="Close">×</button>
+  </header>
+  {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+
+  <div class="kb-grid">
+    <div class="span-2">
+      <label for="kb-title">Title *</label>
+      <input id="kb-title" type="text" name="title" value="{{ v.get('title', '') }}" maxlength="{{ kb.LIMITS.title }}" required
+             placeholder="e.g. SQL injection in login form / Log4Shell on payment API / VPN outage">
+    </div>
+    <div>
+      <label for="kb-kind">Type *</label>
+      <select id="kb-kind" name="kind">
+        {% for val, l in kb.KINDS %}<option value="{{ val }}" {{ 'selected' if v.get('kind', 'incident') == val }}>{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="kb-ref">Reference</label>
+      <input id="kb-ref" type="text" name="reference" value="{{ v.get('reference', '') }}" maxlength="{{ kb.LIMITS.reference }}"
+             placeholder="CVE / finding ID / ticket no.">
+    </div>
+    <div>
+      <label for="kb-sev">Severity *</label>
+      <select id="kb-sev" name="severity">
+        {% for val, l in kb.SEVERITIES %}<option value="{{ val }}" {{ 'selected' if v.get('severity', 'medium') == val }}>{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="kb-status">Status *</label>
+      <select id="kb-status" name="status">
+        {% for val, l in kb.STATUSES %}<option value="{{ val }}" {{ 'selected' if v.get('status', 'resolved') == val }}>{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="kb-tech">Technology (comma separated)</label>
+      <input id="kb-tech" type="text" name="technology" value="{{ v.get('technology', '') }}" maxlength="{{ kb.LIMITS.technology }}"
+             list="kb-tech-list" placeholder="Java, Spring, Tomcat" autocomplete="off">
+      <datalist id="kb-tech-list">{% for t in techs %}<option value="{{ t }}">{% endfor %}</datalist>
+    </div>
+    <div>
+      <label for="kb-tags">Tags (comma separated)</label>
+      <input id="kb-tags" type="text" name="tags" value="{{ v.get('tags', '') }}" maxlength="{{ kb.LIMITS.tags }}"
+             placeholder="owasp-a03, rce, outage" autocomplete="off">
+    </div>
+    <div>
+      <label for="kb-asset">Affected asset / system</label>
+      <input id="kb-asset" type="text" name="asset" value="{{ v.get('asset', '') }}" maxlength="{{ kb.LIMITS.asset }}"
+             placeholder="payments-api, 10.0.4.0/24, HR portal">
+    </div>
+    <div>
+      <label for="kb-date">Date occurred</label>
+      <input id="kb-date" type="date" name="occurred_on" value="{{ v.get('occurred_on') or '' }}">
+    </div>
+    <div>
+      <label for="kb-by">Reported by</label>
+      <input id="kb-by" type="text" name="reported_by" value="{{ v.get('reported_by', '') }}" maxlength="{{ kb.LIMITS.reported_by }}">
+    </div>
+    <div class="span-2">
+      <label for="kb-desc">Description / symptoms / finding</label>
+      <textarea id="kb-desc" name="description" rows="5" maxlength="{{ kb.LIMITS.description }}"
+                placeholder="What happened or what was found. Paste error messages and log lines: they become searchable.">{{ v.get('description', '') }}</textarea>
+    </div>
+    <div class="span-2">
+      <label for="kb-root">Root cause</label>
+      <textarea id="kb-root" name="root_cause" rows="3" maxlength="{{ kb.LIMITS.root_cause }}">{{ v.get('root_cause', '') }}</textarea>
+    </div>
+    <div class="span-2">
+      <label for="kb-sol">Solution / remediation</label>
+      <textarea id="kb-sol" name="solution" rows="8" maxlength="{{ kb.LIMITS.solution }}"
+                placeholder="Steps, config changes, code fix, commands, patch versions…">{{ v.get('solution', '') }}</textarea>
+    </div>
+    <div class="span-2">
+      <label for="kb-links">References / links (one per line)</label>
+      <textarea id="kb-links" name="links" rows="3" maxlength="{{ kb.LIMITS.links }}"
+                placeholder="https://nvd.nist.gov/vuln/detail/CVE-2021-44228">{{ v.get('links', '') }}</textarea>
+    </div>
+  </div>
+
+  <footer class="kb-modal-foot">
+    <button type="submit" class="primary">Save</button>
+    {% if rec %}
+      <button type="button" class="ghost" hx-get="{{ url_for('kb.detail', record_id=rec.id) }}" hx-target="#kb-modal-body">Cancel</button>
+    {% else %}
+      <button type="button" class="ghost" data-kb-close>Cancel</button>
+    {% endif %}
+  </footer>
+</form>

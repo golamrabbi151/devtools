@@ -10,6 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser wsgi.py gunicorn.conf.py ./
+# Knowledge base database lives here; mount a volume so it survives container replacement.
+RUN mkdir -p /srv/app/instance && chown appuser:appuser /srv/app/instance
+VOLUME /srv/app/instance
 
 USER appuser
 EXPOSE 8000

@@ -21,11 +21,13 @@
       </svg>
     </button>
     <a class="brand" href="{{ url_for('main.index') }}"><span class="logo" aria-hidden="true">{ }</span> DevTools Web</a>
-    <span class="topbar-note">Processed in memory · never stored</span>
+    <span class="topbar-note">{% block topnote %}Processed in memory · never stored{% endblock %}</span>
   </header>
 
   <div class="layout">
     <nav id="sidebar" class="sidebar" aria-label="Tools">
+      <div class="group">Knowledge</div>
+      <a href="{{ url_for('kb.index') }}" class="{{ 'active' if active == 'kb' }}"{% if active == 'kb' %} aria-current="page"{% endif %}>Security Knowledge Base</a>
       {% set ns = namespace(group=None) %}
       {% for t in tools %}
         {% if t.group != ns.group %}

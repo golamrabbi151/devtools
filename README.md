@@ -15,16 +15,38 @@ A DevToys-style toolbox as a web app: **Flask + HTMX**, no front-end build step.
 | QR Code | generate PNG, read from uploaded image |
 | JWT | decode, verify HS256/384/512, encode + sign |
 | Excel to JSON | `.xlsx` → JSON (all sheets or one), header row, hidden-sheet option; values only, formulas never evaluated |
+| Excel to SQL | `.xlsx` → `CREATE TABLE` + `INSERT` for MySQL, PostgreSQL, SQL Server or SQLite; inferred column types, batched multi-row inserts, escaped literals (never executed) |
 | Lorem Ipsum | paragraphs / sentences / words, optional classic opening |
 | Password Generator | CSPRNG (`secrets`), length 4–128, character sets, look-alike & custom exclusions, entropy estimate |
 | UUID Generator | v4, v7, v5, v3, nil, max; formatting options; UUID inspector |
+
+## Security Knowledge Base
+
+A searchable store of **VA / PT findings and incidents with their solutions**, for any technology
+(Java, Python, PHP, .NET, system, network, cloud, …). Open it from the sidebar (`/kb`).
+
+- **Records:** type (Incident / Vulnerability Assessment / Penetration Test), title, reference (CVE, finding id,
+  ticket), severity, status, technologies, tags, affected asset, date, reporter, description, root cause,
+  solution, reference links.
+- **List + details modal:** results show severity / status / "has solution" badges and a highlighted snippet;
+  click one for the full record, related records, copy-solution, edit and delete. Direct links (`/kb/42`) work.
+- **Search** (SQLite FTS5, no extra service): ranked by relevance with title and reference (CVE) weighted
+  highest, then technology, tags, solution and description. Stemming (`injected` finds *injection*), prefix
+  matching while typing (`log4` finds *log4j*), `"exact phrases"`, and an automatic any-word fallback when no
+  record has all the words. Filters: type, technology, severity, status (incl. *open + in progress*), has
+  solution; sort by best match, recently updated, severity or date. Press `/` to jump to the search box.
+- **Access:** sign-in with a shared password from `KB_PASSWORD` (the KB is **disabled** if it is not set).
+  Sign-in is rate limited (10/min). All writes are CSRF-protected and all text is stored and shown as escaped
+  plain text.
+- **Storage:** one SQLite file, `instance/kb.sqlite3` by default (`KB_DB_PATH` to change it). WAL mode, safe for
+  several workers on one host. **Back it up**, e.g. `sqlite3 instance/kb.sqlite3 ".backup kb-backup.sqlite3"`.
 
 ## Run locally
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-python wsgi.py                 # http://127.0.0.1:5000 (APP_ENV=development)
+KB_PASSWORD=choose-one python wsgi.py   # http://127.0.0.1:5000 (APP_ENV=development)
 pytest                         # tests, incl. security tests
 bandit -r app && pip-audit     # static analysis + dependency CVEs
 ```
@@ -33,8 +55,10 @@ bandit -r app && pip-audit     # static analysis + dependency CVEs
 
 ```bash
 docker build -t devtools-web .
-docker run -p 8000:8000 -e SECRET_KEY="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')" devtools-web
+docker run -p 8000:8000 -e SECRET_KEY="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"   -e KB_PASSWORD="a-long-shared-password" -v devtools-kb:/srv/app/instance devtools-web
 ```
+
+The `-v` volume keeps the knowledge base database when the container is replaced.
 
 Put it behind a TLS-terminating reverse proxy (nginx / Caddy / cloud LB) that sets
 `X-Forwarded-Proto`. Production refuses to start without a strong `SECRET_KEY`.
@@ -53,6 +77,8 @@ devtools/
 │   ├── registry.py         # Tool / Field / Action / Result + registry
 │   ├── highlight.py        # safe server-side syntax highlighting (escaped spans)
 │   ├── routes.py           # ONE generic page + ONE generic HTMX endpoint
+│   ├── kb.py               # knowledge base: SQLite schema, validation, FTS5 search
+│   ├── kb_routes.py        # knowledge base pages, modal fragments, sign-in
 │   ├── tools/              # one module per tool (logic + spec)
 │   ├── templates/          # base, tool (form generated from spec), _result partial
 │   └── static/             # css, app.js, vendored htmx (no CDN)
@@ -72,6 +98,7 @@ Limits live in `app/config.py` (`UPLOAD_LIMITS`) and can be overridden per deplo
 | Tool | Default | Env var |
 |---|---|---|
 | Excel to JSON | **1 MB** | `UPLOAD_MB_EXCEL_JSON` |
+| Excel to SQL | **1 MB** | `UPLOAD_MB_EXCEL_SQL` |
 | Base64 Image | **5 MB** | `UPLOAD_MB_BASE64_IMAGE` |
 | Certificate Decoder | **2 MB** | `UPLOAD_MB_CERTIFICATE` |
 | QR Code | **2 MB** | `UPLOAD_MB_QR_CODE` |

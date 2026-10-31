@@ -1,0 +1,71 @@
+{# Details shown in the modal. All values are plain text, autoescaped; long text keeps its line breaks. #}
+<div class="kb-detail">
+  <header class="kb-modal-head">
+    <div>
+      <div class="kb-item-top">
+        <span class="badge sev-{{ rec.severity }}">{{ kb.label(kb.SEVERITIES, rec.severity) }}</span>
+        <span class="badge kind">{{ kb.label(kb.KINDS, rec.kind) }}</span>
+        <span class="badge st-{{ rec.status }}">{{ kb.label(kb.STATUSES, rec.status) }}</span>
+        <span class="muted small">#{{ rec.id }}</span>
+      </div>
+      <h2>{{ rec.title }}</h2>
+    </div>
+    <button type="button" class="icon-btn kb-close" data-kb-close aria-label="Close">×</button>
+  </header>
+  {% if notice %}<div class="note">{{ notice }}</div>{% endif %}
+
+  <dl class="kb-facts">
+    {% if rec.reference %}<div><dt>Reference</dt><dd>{{ rec.reference }}</dd></div>{% endif %}
+    {% if rec.technology %}<div><dt>Technology</dt><dd>{% for t in rec.technology.split(', ') %}<span class="tag tech">{{ t }}</span>{% endfor %}</dd></div>{% endif %}
+    {% if rec.asset %}<div><dt>Affected asset</dt><dd>{{ rec.asset }}</dd></div>{% endif %}
+    {% if rec.occurred_on %}<div><dt>Occurred</dt><dd>{{ rec.occurred_on }}</dd></div>{% endif %}
+    {% if rec.reported_by %}<div><dt>Reported by</dt><dd>{{ rec.reported_by }}</dd></div>{% endif %}
+    {% if rec.tags %}<div><dt>Tags</dt><dd>{% for t in rec.tags.split(', ') %}<span class="tag">#{{ t }}</span>{% endfor %}</dd></div>{% endif %}
+    <div><dt>Updated</dt><dd>{{ rec.updated_at }} UTC</dd></div>
+  </dl>
+
+  {% for field, heading in (("description", "Description / symptoms"), ("root_cause", "Root cause")) %}
+    {% if rec[field] %}<section class="kb-sec"><h3>{{ heading }}</h3><div class="kb-text">{{ rec[field] }}</div></section>{% endif %}
+  {% endfor %}
+
+  <section class="kb-sec kb-solution">
+    <h3>Solution
+      {% if rec.solution %}<button type="button" class="tool-btn" data-copy="#kb-sol-{{ rec.id }}">Copy</button>{% endif %}
+    </h3>
+    {% if rec.solution %}<div class="kb-text" id="kb-sol-{{ rec.id }}">{{ rec.solution }}</div>
+    {% else %}<p class="muted">No solution recorded yet.</p>{% endif %}
+  </section>
+
+  {% if rec.links %}
+  <section class="kb-sec"><h3>References / links</h3>
+    <ul class="kb-links">
+      {% for line in rec.links.splitlines() if line.strip() %}
+        {% set l = line.strip() %}
+        <li>{% if l.startswith('https://') or l.startswith('http://') %}<a href="{{ l }}" target="_blank" rel="noopener noreferrer">{{ l }}</a>{% else %}{{ l }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if related %}
+  <section class="kb-sec"><h3>Related records</h3>
+    <ul class="kb-related">
+      {% for r in related %}
+      <li><a href="{{ url_for('kb.detail', record_id=r.id) }}" hx-get="{{ url_for('kb.detail', record_id=r.id) }}" hx-target="#kb-modal-body">
+        <span class="badge sev-{{ r.severity }}">{{ kb.label(kb.SEVERITIES, r.severity) }}</span> {{ r.title }}
+        {% if r.has_solution %}<span class="badge solved">✔</span>{% endif %}</a></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <footer class="kb-modal-foot">
+    <button type="button" class="primary" hx-get="{{ url_for('kb.edit', record_id=rec.id) }}" hx-target="#kb-modal-body">Edit</button>
+    <form hx-post="{{ url_for('kb.remove', record_id=rec.id) }}" hx-target="#kb-modal-body"
+          hx-confirm="Delete this record permanently?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="ghost danger">Delete</button>
+    </form>
+    <button type="button" class="ghost" data-kb-close>Close</button>
+  </footer>
+</div>

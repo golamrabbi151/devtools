@@ -1,0 +1,57 @@
+{# Search results. Highlighted text goes through kb.mark() (escape first, then <mark>). #}
+{% set r = results %}
+<div class="kb-summary muted">
+  {% if r.total %}
+    {{ '{:,}'.format(r.total) }} record{{ 's' if r.total != 1 }}{% if r.searched %} matching <strong>{{ r.query }}</strong>{% endif %}
+    {% if r.pages > 1 %} · page {{ r.page }} of {{ r.pages }}{% endif %}
+  {% endif %}
+</div>
+{% if r.fallback %}
+  <div class="note">No record contains all of your words, so these records match <em>some</em> of them.</div>
+{% endif %}
+
+{% if not r.rows %}
+  <div class="kb-empty">
+    {% if r.searched or params.get('kind') or params.get('tech') or params.get('severity') or params.get('status') or params.get('has_solution') %}
+      <p><strong>Nothing found.</strong></p>
+      <p class="muted">Try fewer or shorter words (prefixes work: <code>deser</code> finds “deserialization”), or clear the filters.</p>
+    {% else %}
+      <p><strong>No records yet.</strong></p>
+      <p class="muted">Add your first VA / PT finding or incident with <em>+ New record</em>.</p>
+    {% endif %}
+  </div>
+{% else %}
+<ul class="kb-list">
+  {% for row in r.rows %}
+  <li>
+    <a class="kb-item" href="{{ url_for('kb.detail', record_id=row.id) }}"
+       hx-get="{{ url_for('kb.detail', record_id=row.id) }}" hx-target="#kb-modal-body" hx-push-url="false">
+      <div class="kb-item-top">
+        <span class="badge sev-{{ row.severity }}">{{ kb.label(kb.SEVERITIES, row.severity) }}</span>
+        <span class="badge kind">{{ kb.label(kb.KINDS, row.kind) }}</span>
+        <span class="badge st-{{ row.status }}">{{ kb.label(kb.STATUSES, row.status) }}</span>
+        {% if row.has_solution %}<span class="badge solved">✔ Solution</span>{% endif %}
+        <span class="kb-date muted small">{{ row.occurred_on or row.updated_at[:10] }}</span>
+      </div>
+      <div class="kb-title">{{ kb.mark(row.title_hl) }}{% if row.reference %} <span class="kb-ref">{{ row.reference }}</span>{% endif %}</div>
+      {% if row.snippet %}<div class="kb-snippet">{{ kb.mark(row.snippet) }}</div>{% endif %}
+      <div class="kb-meta">
+        {% for t in row.technology.split(', ') if t %}<span class="tag tech">{{ t }}</span>{% endfor %}
+        {% for t in row.tags.split(', ') if t %}<span class="tag">#{{ t }}</span>{% endfor %}
+        {% if row.asset %}<span class="muted small">· {{ row.asset }}</span>{% endif %}
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% if r.pages > 1 %}
+<nav class="kb-pager" aria-label="Pages">
+  {% for p, label in ((r.page - 1, '← Previous'), (r.page + 1, 'Next →')) %}
+    {% if 1 <= p <= r.pages %}
+      <button type="button" class="tool-btn" hx-get="{{ url_for('kb.index', page=p) }}" hx-include="#kb-filters"
+              hx-target="#kb-results" hx-replace-url="true">{{ label }}</button>
+    {% endif %}
+  {% endfor %}
+</nav>
+{% endif %}
+{% endif %}

@@ -66,8 +66,9 @@ def _trim(row) -> list:
     return row
 
 
-def convert(data: bytes, sheet: str = "", header: bool = True, include_hidden: bool = False):
-    """Return ({sheet_name: rows}, stats). rows are list[dict] (header) or list[list]."""
+def convert(data: bytes, sheet: str = "", header: bool = True, include_hidden: bool = False, cell=_cell):
+    """Return ({sheet_name: rows}, stats). rows are list[dict] (header) or list[list].
+    `cell` converts each data value (default: JSON-safe); header names always go through _cell."""
     started = time.monotonic()
     try:
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True, keep_links=False)
@@ -106,7 +107,7 @@ def convert(data: bytes, sheet: str = "", header: bool = True, include_hidden: b
                 cells += len(row)
                 if cells > MAX_CELLS:
                     raise ToolError(f"The workbook has more than {MAX_CELLS:,} filled cells.")
-                vals = [_cell(v) for v in row]
+                vals = [cell(v) for v in row]
                 if header:
                     if len(vals) > len(head):                  # data wider than header row
                         head += _headers([], len(vals))[len(head):]

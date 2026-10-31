@@ -54,6 +54,11 @@ def create_app(config_name: str | None = None) -> Flask:
     from .routes import bp
     app.register_blueprint(bp)
 
+    from . import kb
+    from .kb_routes import bp as kb_bp
+    app.register_blueprint(kb_bp)
+    app.teardown_appcontext(kb.close_db)
+
     _register_errors(app)
     return app
 

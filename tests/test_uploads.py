@@ -396,3 +396,45 @@ def test_proxy_hops_use_real_client_ip(monkeypatch):
     finally:
         monkeypatch.delenv("PROXY_HOPS")
         reload(cfg)
+
+
+# ------------------------------------------------------------------ Excel to SQL behaviour
+def _out_sql(resp):
+    body = resp.get_data(as_text=True).split('<pre id="out" class="hl">')[1].split("</pre>")[0]
+    return html.unescape(re.sub(r"<[^>]+>", "", body))
+
+
+def test_excel_sql_create_and_insert(run):
+    r = up(run, "excel-sql", xlsx(), "data.xlsx", header="on", create="on", dialect="postgres", batch="100")
+    sql = _out_sql(r)
+    assert 'CREATE TABLE "Sheet" (\n  "name" TEXT,\n  "qty" DOUBLE PRECISION,\n  "when" TIMESTAMP\n);' in sql
+    assert "('apple', 3, '2026-01-02 03:04:05'),\n  ('pear', 4.5, NULL);" in sql
+    assert "Security check passed" in text(r)
+
+
+def test_excel_sql_dialects_quote_and_escape(run):
+    data = xlsx(sheets={"S": [["it's", "flag", "n"], ["O'Brien \\ x", True, 1], ["y", False, 5_000_000_000]]})
+    my = _out_sql(up(run, "excel-sql", data, "d.xlsx", header="on", create="on", dialect="mysql", table="t"))
+    assert "CREATE TABLE `t` (\n  `it's` VARCHAR(255),\n  `flag` BOOLEAN,\n  `n` BIGINT\n);" in my
+    assert "('O''Brien \\\\ x', TRUE, 1)" in my                  # MySQL: backslash doubled
+    ms = _out_sql(up(run, "excel-sql", data, "d.xlsx", header="on", dialect="sqlserver", table="a]b", batch="1"))
+    assert "CREATE TABLE" not in ms
+    assert "INSERT INTO [a]]b] ([it's], [flag], [n]) VALUES (N'O''Brien \\ x', 1, 1);" in ms
+    lite = _out_sql(up(run, "excel-sql", data, "d.xlsx", header="on", dialect="sqlite", drop="on", create="on"))
+    assert lite.startswith('DROP TABLE IF EXISTS "S";')
+
+
+def test_excel_sql_dates_no_header_and_sheet_rules(run):
+    data = xlsx(sheets={"A": [[datetime(2026, 5, 1), "x"], [datetime(2026, 5, 2)]], "B": [["z"], [9]]})
+    sql = _out_sql(up(run, "excel-sql", data, "d.xlsx", sheet="A", create="on", dialect="mysql"))
+    assert "`column_1` DATE" in sql and "('2026-05-01', 'x'),\n  ('2026-05-02', NULL);" in sql
+    assert "applies to one sheet" in text(up(run, "excel-sql", data, "d.xlsx", header="on", table="t"))
+    both = _out_sql(up(run, "excel-sql", data, "d.xlsx", header="on"))
+    assert "INSERT INTO `A`" in both and "INSERT INTO `B` (`z`) VALUES\n  (9);" in both
+
+
+def test_excel_sql_output_is_escaped_and_rejects_bad_files(run):
+    data = xlsx(sheets={"<img src=x onerror=alert(1)>": [["h"], ["<script>alert(1)</script>"]]})
+    page = up(run, "excel-sql", data, "x.xlsx", header="on").get_data(as_text=True)
+    assert "<script" not in page and "<img" not in page
+    assert "Rejected" in text(up(run, "excel-sql", b"MZ\x90\x00junk", "evil.xlsx"))

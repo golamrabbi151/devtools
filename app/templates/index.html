@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Developer tools</h1>
-<p class="muted">Pick a tool. Everything runs on this server; nothing is saved.</p>
+<p class="muted">Pick a tool. Everything runs on this server; tool input is never saved (only the Knowledge Base stores records).</p>
 <div class="cards">
+  <a class="card" href="{{ url_for('kb.index') }}">
+    <strong>Security Knowledge Base</strong><span>Store and search VA / PT findings and incidents with their solutions (sign-in required).</span>
+  </a>
   {% for t in tools %}
   <a class="card" href="{{ url_for('main.tool_page', slug=t.slug) }}">
     <strong>{{ t.title }}</strong><span>{{ t.description }}</span>

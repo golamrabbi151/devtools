@@ -168,6 +168,34 @@
     reader.readAsText(file);
   });
 
+  /* ---------- knowledge base: details / edit modal ---------- */
+  const kbModal = $("#kb-modal");
+  if (kbModal) {
+    const openModal = () => { if (!kbModal.open) kbModal.showModal(); };
+    if (kbModal.hasAttribute("data-autoopen")) openModal();
+    document.body.addEventListener("htmx:afterSwap", (e) => {
+      if (e.target && e.target.id === "kb-modal-body") {
+        if (e.target.childElementCount) { openModal(); kbModal.scrollTop = 0; } else kbModal.close();
+      }
+    });
+    document.body.addEventListener("kb-close", () => kbModal.close());
+    kbModal.addEventListener("click", (e) => {
+      // backdrop click (the dialog element itself) or any [data-kb-close] button closes it
+      if (e.target === kbModal || (e.target instanceof Element && e.target.closest("[data-kb-close]"))) kbModal.close();
+    });
+    kbModal.addEventListener("close", () => {
+      if (location.pathname !== "/kb" && /^\/kb\/\d+$/.test(location.pathname)) history.replaceState(null, "", "/kb");
+    });
+    // "/" focuses the search box (unless typing somewhere already)
+    document.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (e.key === "/" && !kbModal.open && !(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement)) {
+        e.preventDefault();
+        const q = $("#kb-q"); q && q.focus();
+      }
+    });
+  }
+
   /* ---------- generic form reset (stacked layout) ---------- */
   document.addEventListener("reset", (e) => {
     const form = e.target;

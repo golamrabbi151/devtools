@@ -19,7 +19,7 @@ def out_text(resp):
 def test_all_pages_render(client):
     assert client.get("/").status_code == 200
     for slug in ("json-format", "json-compare", "sql-format", "xml-format", "cron",
-                 "base64-text", "base64-image", "certificate", "qr-code", "jwt",
+                 "base64-text", "base64-image", "certificate", "qr-code", "jwt", "excel-json", "excel-sql",
                  "lorem-ipsum", "password", "uuid"):
         assert client.get(f"/tool/{slug}").status_code == 200, slug
     assert client.get("/tool/nope").status_code == 404

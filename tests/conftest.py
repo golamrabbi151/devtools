@@ -6,8 +6,10 @@ from app import create_app
 
 
 @pytest.fixture()
-def app():
-    return create_app("testing")
+def app(tmp_path):
+    app = create_app("testing")
+    app.config["KB_DB_PATH"] = str(tmp_path / "kb.sqlite3")     # fresh knowledge base per test
+    return app
 
 
 @pytest.fixture()
