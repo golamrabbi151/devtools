@@ -35,18 +35,41 @@ A searchable store of **VA / PT findings and incidents with their solutions**, f
   matching while typing (`log4` finds *log4j*), `"exact phrases"`, and an automatic any-word fallback when no
   record has all the words. Filters: type, technology, severity, status (incl. *open + in progress*), has
   solution; sort by best match, recently updated, severity or date. Press `/` to jump to the search box.
-- **Access:** sign-in with a shared password from `KB_PASSWORD` (the KB is **disabled** if it is not set).
-  Sign-in is rate limited (10/min). All writes are CSRF-protected and all text is stored and shown as escaped
-  plain text.
+- **Access:** anyone who can reach the server can list, search and read records. **Adding, editing and
+  deleting** need a sign-in with an AD user name and password, checked by the AD login API at `KB_AUTH_URL`
+  (POST JSON `{"userId", "password", "channelCode"}`; valid when the reply has `responseCode` 100 and
+  `isValidUser` 1). A sign-in lasts `KB_SESSION_MINUTES` (default **30**) from login, then the user is signed
+  out automatically (the page shows the minutes left). Passwords are only forwarded to the API over HTTPS,
+  never stored or logged. Records show who added and last edited them. Sign-in is rate limited (10/min), all
+  writes are CSRF-protected and all text is stored and shown as escaped plain text. Without `KB_AUTH_URL`
+  the KB is read-only.
 - **Storage:** one SQLite file, `instance/kb.sqlite3` by default (`KB_DB_PATH` to change it). WAL mode, safe for
   several workers on one host. **Back it up**, e.g. `sqlite3 instance/kb.sqlite3 ".backup kb-backup.sqlite3"`.
+
+## Home page: birthday celebrations
+
+The home page shows colleagues' birthdays as a card slider (photo, name, role, date and a wish that stays the
+same all day), with tabs for **Past 7 days**, **Yesterday**, **Today** and **Next 7 days**. Only day and month
+are shown, never the year or age. Today's cards get a golden glow; the slider autoplays (paused on hover/focus,
+off for reduced-motion users) and can be swiped, scrolled or driven with the arrow keys.
+
+- **Data:** `BIRTHDAY_API_URL` (JSON, cached `BIRTHDAY_CACHE_SECONDS`, default 600; optional
+  `BIRTHDAY_API_TOKEN` sent as a bearer token). Until it is set, built-in sample users are used; the same
+  data is served at `GET /api/birthdays`, which shows the expected shape:
+  `{"users": [{"id", "name", "designation", "department", "birthday": "YYYY-MM-DD", "image"}]}`.
+  Common alternative field names (`fullName`, `dob`, `dateOfBirth`, `photoUrl`, `jobTitle`, …), a bare list or
+  `{"data": [...]}`, and dates like `DD-MM-YYYY`, `DD/MM/YYYY` or `MM-DD` are understood (see `app/birthdays.py`).
+- **Photos:** if they are served from another host, list it in `BIRTHDAY_IMAGE_ORIGINS` (e.g.
+  `https://hr.example.com`) so the Content-Security-Policy allows them. Missing photos fall back to initials.
+- If the API is down, the page still loads and the section says birthdays are not available.
 
 ## Run locally
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-KB_PASSWORD=choose-one python wsgi.py   # http://127.0.0.1:5000 (APP_ENV=development)
+KB_AUTH_URL=https://login.example.com/user python wsgi.py   # http://127.0.0.1:5000 (APP_ENV=development)
+# Windows cmd:  set KB_AUTH_URL=https://login.example.com/user  then  py wsgi.py
 pytest                         # tests, incl. security tests
 bandit -r app && pip-audit     # static analysis + dependency CVEs
 ```
@@ -55,7 +78,7 @@ bandit -r app && pip-audit     # static analysis + dependency CVEs
 
 ```bash
 docker build -t devtools-web .
-docker run -p 8000:8000 -e SECRET_KEY="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"   -e KB_PASSWORD="a-long-shared-password" -v devtools-kb:/srv/app/instance devtools-web
+docker run -p 8000:8000 -e SECRET_KEY="$(python -c 'import secrets;print(secrets.token_urlsafe(48))')"   -e KB_AUTH_URL="https://login.example.com/user" -e KB_AUTH_CHANNEL="USERCODE" -v devtools-kb:/srv/app/instance devtools-web
 ```
 
 The `-v` volume keeps the knowledge base database when the container is replaced.

@@ -49,9 +49,18 @@ class Config:
     JSON_SORT_KEYS = False
     TESTING = False
 
-    # ---- Knowledge base (VA / PT / incidents). Disabled unless KB_PASSWORD is set. ----
-    KB_PASSWORD = os.environ.get("KB_PASSWORD", "")
+    # ---- Knowledge base (VA / PT / incidents). Reading is public; adding / editing needs an AD sign-in. ----
+    KB_AUTH_URL = os.environ.get("KB_AUTH_URL", "")                 # AD login API (https); empty = no sign-in
+    KB_AUTH_CHANNEL = os.environ.get("KB_AUTH_CHANNEL", "USERCODE")  # "channelCode" sent to the API
+    KB_SESSION_MINUTES = max(1, min(int(os.environ.get("KB_SESSION_MINUTES", "30") or 30), 24 * 60))
     KB_DB_PATH = os.environ.get("KB_DB_PATH", "")   # default: <instance folder>/kb.sqlite3
+
+    # ---- Birthday cards on the home page. Empty URL = built-in dummy data (/api/birthdays). ----
+    BIRTHDAY_API_URL = os.environ.get("BIRTHDAY_API_URL", "")
+    BIRTHDAY_API_TOKEN = os.environ.get("BIRTHDAY_API_TOKEN", "")    # optional: sent as "Authorization: Bearer"
+    BIRTHDAY_CACHE_SECONDS = max(0, int(os.environ.get("BIRTHDAY_CACHE_SECONDS", "600") or 600))
+    # Space-separated https origins the user photos are served from, e.g. "https://hr.example.com"
+    BIRTHDAY_IMAGE_ORIGINS = os.environ.get("BIRTHDAY_IMAGE_ORIGINS", "")
 
 
 class DevelopmentConfig(Config):
@@ -76,7 +85,7 @@ class TestingConfig(Config):
     SESSION_COOKIE_SECURE = False
     WTF_CSRF_SSL_STRICT = False
     RATELIMIT_ENABLED = False
-    KB_PASSWORD = "test-kb-password"
+    KB_AUTH_URL = "https://auth.example.invalid/user"
 
 
 def get_config(name: str | None):

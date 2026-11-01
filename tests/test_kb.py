@@ -1,12 +1,17 @@
-"""Security knowledge base: access control, CRUD, search quality and output escaping."""
+"""Security knowledge base: public reading, AD sign-in + 30 min session, CRUD, search, escaping."""
 import html
+import io
+import json
 import re
+import sqlite3
+import time
+import urllib.error
 
 import pytest
 
-from app import kb
+from app import kb, kb_auth, kb_routes
 
-PW = "test-kb-password"
+USER, PW = "rabbi", "s3cret!"
 
 
 def token(client, path="/kb"):
@@ -14,10 +19,26 @@ def token(client, path="/kb"):
 
 
 @pytest.fixture()
-def kbc(client):
+def ad(monkeypatch):
+    """Fake AD login API: accepts USER / PW only. Records every call."""
+    calls = []
+
+    def fake(user, password):
+        calls.append((user, password))
+        return user == USER and password == PW
+    monkeypatch.setattr(kb_auth, "authenticate", fake)
+    return calls
+
+
+def sign_in(client, user=USER, password=PW, **extra):
+    return client.post("/kb/login", data={"username": user, "password": password,
+                                          "csrf_token": token(client, "/kb/login"), **extra})
+
+
+@pytest.fixture()
+def kbc(client, ad):
     """Signed-in client."""
-    r = client.post("/kb/login", data={"password": PW, "csrf_token": token(client, "/kb/login")})
-    assert r.status_code == 302
+    assert sign_in(client).status_code == 302
     return client
 
 
@@ -56,26 +77,163 @@ def seeded(kbc):
     return kbc
 
 
-# ------------------------------------------------------------------ access control
-def test_requires_sign_in(client):
-    assert client.get("/kb").status_code == 302
-    r = client.get("/kb", headers={"HX-Request": "true"})
+# ------------------------------------------------------------------ public reading
+def test_records_are_public_but_read_only(seeded, app):
+    anon = app.test_client()
+    page = anon.get("/kb").get_data(as_text=True)
+    assert "Sign in to add records" in page and "+ New record" not in page and "Sign out" not in page
+    assert len(titles(listing(anon, q="log4"))) == 1                       # search works without sign-in
+    d = detail(anon, 1)
+    assert "Log4Shell" in d and "log4j-core to 2.17.1" in d
+    assert ">Edit<" not in d and ">Delete<" not in d and "by rabbi" in d   # author shown, no edit controls
+
+
+def test_writes_require_sign_in(client, ad):
+    assert client.get("/kb").status_code == 200
+    assert client.get("/kb/new").headers["Location"] == "/kb/login"
+    r = client.get("/kb/new", headers={"HX-Request": "true"})
     assert r.status_code == 401 and r.headers["HX-Redirect"] == "/kb/login"
     t = token(client, "/kb/login")
     assert client.post("/kb/save", data={"title": "x", "csrf_token": t}).status_code == 302
+    assert client.post("/kb/1/delete", data={"csrf_token": t}).status_code == 302
+    assert client.get("/kb/1/edit").status_code == 302
 
 
-def test_wrong_password_and_open_redirect(client):
-    t = token(client, "/kb/login")
-    assert client.post("/kb/login", data={"password": "nope", "csrf_token": t}).status_code == 401
-    r = client.post("/kb/login", data={"password": PW, "next": "//evil.example", "csrf_token": t})
+# ------------------------------------------------------------------ sign-in
+def test_sign_in_shows_user_and_sign_out(client, ad):
+    r = sign_in(client)
+    assert r.status_code == 302 and r.headers["Location"] == "/kb"
+    assert ad == [(USER, PW)]
+    page = client.get("/kb").get_data(as_text=True)
+    assert "Signed in as <strong>rabbi</strong>" in page and "Sign out" in page and "+ New record" in page
+    assert 'data-expires="' in page
+    r = client.post("/kb/logout", data={"csrf_token": token(client)})
     assert r.headers["Location"] == "/kb"
+    assert "Sign in to add records" in client.get("/kb").get_data(as_text=True)
 
 
-def test_disabled_without_password(app, client):
-    app.config["KB_PASSWORD"] = ""
-    assert client.get("/kb").status_code == 503
-    assert "KB_PASSWORD" in client.get("/kb/login").get_data(as_text=True)
+def test_wrong_password_and_open_redirect(client, ad):
+    r = sign_in(client, password="nope")
+    body = r.get_data(as_text=True)
+    assert r.status_code == 401 and "Invalid user name or password" in body
+    assert 'value="rabbi"' in body and "nope" not in body                 # user name kept, password never echoed
+    assert sign_in(client, password="").status_code == 400
+    assert sign_in(client, next="//evil.example").headers["Location"] == "/kb"
+
+
+def test_auth_service_down(client, monkeypatch):
+    def down(user, password):
+        raise kb_auth.AuthUnavailable("URLError")
+    monkeypatch.setattr(kb_auth, "authenticate", down)
+    r = sign_in(client)
+    assert r.status_code == 503 and "not reachable" in r.get_data(as_text=True)
+
+
+def test_session_expires_after_30_minutes(kbc, monkeypatch):
+    assert kbc.get("/kb/new").status_code == 200
+    real = time.time
+    monkeypatch.setattr(kb_routes.time, "time", lambda: real() + 29 * 60)
+    assert kbc.get("/kb/new").status_code == 200
+    monkeypatch.setattr(kb_routes.time, "time", lambda: real() + 30 * 60 + 1)
+    assert kbc.get("/kb/new").status_code == 302                          # signed out
+    assert "Sign in to add records" in kbc.get("/kb").get_data(as_text=True)
+    monkeypatch.setattr(kb_routes.time, "time", real)
+    assert kbc.get("/kb/new").status_code == 302                          # stays signed out
+
+
+def test_sign_in_disabled_without_api_url(app, client):
+    app.config["KB_AUTH_URL"] = ""
+    assert client.get("/kb").status_code == 200                           # reading still works
+    r = client.get("/kb/login")
+    assert r.status_code == 503 and "KB_AUTH_URL" in r.get_data(as_text=True)
+
+
+# ------------------------------------------------------------------ the AD API client
+class _Resp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+@pytest.fixture()
+def api(app, monkeypatch):
+    sent = {}
+
+    def install(reply=None, exc=None):
+        def fake_open(req, timeout):
+            sent.update(body=json.loads(req.data), headers=dict(req.header_items()), timeout=timeout)
+            if exc:
+                raise exc
+            return _Resp(reply if isinstance(reply, bytes) else json.dumps(reply).encode())
+        monkeypatch.setattr(kb_auth._opener, "open", fake_open)
+        return sent
+    with app.app_context():
+        yield install
+
+
+def test_api_success_and_request_shape(api):
+    sent = api({"responseCode": 100, "isValidUser": 1})
+    assert kb_auth.authenticate("rabbi", "pw") is True
+    assert sent["body"] == {"userId": "rabbi", "password": "pw", "channelCode": "USERCODE"}
+    assert sent["headers"]["Content-type"] == "application/json" and sent["timeout"] == kb_auth.TIMEOUT_S
+    api({"responseCode": "100", "isValidUser": "1"})                      # string values are fine too
+    assert kb_auth.authenticate("rabbi", "pw") is True
+
+
+@pytest.mark.parametrize("reply", [{"responseCode": 100, "isValidUser": 0}, {"responseCode": 101, "isValidUser": 1},
+                                   {"isValidUser": 1}, {}])
+def test_api_rejections(api, reply):
+    api(reply)
+    assert kb_auth.authenticate("rabbi", "pw") is False
+
+
+def test_api_failures_are_reported_as_unavailable(api):
+    for kwargs in ({"reply": b"<html>gateway error</html>"}, {"reply": [1, 2]},
+                   {"exc": urllib.error.URLError("down")}, {"exc": TimeoutError()},
+                   {"exc": urllib.error.HTTPError("u", 502, "Bad Gateway", {}, io.BytesIO(b"{}"))}):
+        api(**kwargs)
+        with pytest.raises(kb_auth.AuthUnavailable):
+            kb_auth.authenticate("rabbi", "pw")
+    api(exc=urllib.error.HTTPError("u", 401, "Unauthorized", {},
+                                   io.BytesIO(b'{"responseCode": 101, "isValidUser": 0}')))
+    assert kb_auth.authenticate("rabbi", "pw") is False                   # 4xx with a JSON verdict
+
+
+def test_api_requires_https(api, app):
+    api({"responseCode": 100, "isValidUser": 1})
+    app.config["KB_AUTH_URL"] = "http://login.example/user"
+    with pytest.raises(kb_auth.AuthUnavailable):
+        kb_auth.authenticate("rabbi", "pw")
+
+
+def test_api_does_not_follow_redirects():
+    assert kb_auth._NoRedirect().redirect_request(None, None, 302, "Found", {}, "https://elsewhere") is None
+
+
+# ------------------------------------------------------------------ audit + migration
+def test_created_and_updated_by(kbc):
+    save(kbc, title="Open SMB share")
+    d = detail(kbc, 1)
+    assert "by rabbi" in d and "Last edited" not in d
+
+
+def test_old_database_gets_new_columns(app, tmp_path):
+    path = tmp_path / "old.sqlite3"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE records (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, "
+                "reference TEXT NOT NULL DEFAULT '', severity TEXT NOT NULL, status TEXT NOT NULL, "
+                "technology TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', asset TEXT NOT NULL DEFAULT '', "
+                "description TEXT NOT NULL DEFAULT '', root_cause TEXT NOT NULL DEFAULT '', "
+                "solution TEXT NOT NULL DEFAULT '', links TEXT NOT NULL DEFAULT '', "
+                "reported_by TEXT NOT NULL DEFAULT '', occurred_on TEXT, created_at TEXT NOT NULL, "
+                "updated_at TEXT NOT NULL)")
+    con.close()
+    app.config["KB_DB_PATH"] = str(path)
+    with app.test_request_context():
+        cols = {r[1] for r in kb.get_db().execute("PRAGMA table_info(records)")}
+    assert {"created_by", "updated_by"} <= cols
 
 
 def test_csrf_required(kbc):

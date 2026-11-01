@@ -1,20 +1,40 @@
-"""Knowledge base pages: list + search, details modal, create / edit / delete, password sign-in.
+"""Knowledge base pages: list + search, details modal, create / edit / delete, AD sign-in.
 
-Access: every route needs a signed-in session. The shared password comes from the KB_PASSWORD
-env var; without it the knowledge base is disabled (findings are sensitive, so no open default).
+Access: anyone can list, search and read records. Adding, editing and deleting need a sign-in
+against the AD login API (app/kb_auth.py). A sign-in lasts KB_SESSION_MINUTES (default 30) from the
+moment of login; after that the session is dropped and the user is signed out.
 """
-import hmac
 import json
+import time
 from functools import wraps
 
 from flask import (Blueprint, abort, current_app, make_response, redirect, render_template, request,
                    session, url_for)
 
-from . import kb
+from . import kb, kb_auth
 from .extensions import limiter
 from .registry import all_tools
 
 bp = Blueprint("kb", __name__, url_prefix="/kb")
+MAX_USER, MAX_PASSWORD = 128, 256
+
+
+# ------------------------------------------------------------------ session
+def current_user() -> str | None:
+    """Signed-in user name, or None. An expired sign-in is cleared here (= automatic sign-out)."""
+    user, exp = session.get("kb_user"), session.get("kb_exp", 0)
+    if user and time.time() < exp:
+        return user
+    if user:
+        session.pop("kb_user", None)
+        session.pop("kb_exp", None)
+    return None
+
+
+@bp.app_context_processor
+def _inject_user():
+    user = current_user() if request.blueprint == "kb" else None
+    return {"kb_user": user, "kb_exp": int(session.get("kb_exp", 0)) if user else 0}
 
 
 def _page(template, **ctx):
@@ -30,14 +50,12 @@ def _hx_target() -> str:
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
-        if not current_app.config.get("KB_PASSWORD"):
-            return _page("kb_login.html", disabled=True), 503
-        if not session.get("kb_auth"):
+        if not current_user():
             if request.headers.get("HX-Request"):  # HTMX fragment: send the whole page to sign-in
                 resp = make_response("", 401)
                 resp.headers["HX-Redirect"] = url_for("kb.login")
                 return resp
-            return redirect(url_for("kb.login", next=request.full_path if request.method == "GET" else None))
+            return redirect(url_for("kb.login"))
         return view(*args, **kwargs)
     return wrapper
 
@@ -57,36 +75,51 @@ def _page_num() -> int:
         return 1
 
 
-# ------------------------------------------------------------------ auth
+# ------------------------------------------------------------------ sign-in / sign-out
 @bp.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
 def login():
-    if not current_app.config.get("KB_PASSWORD"):
+    if not kb_auth.configured():
         return _page("kb_login.html", disabled=True), 503
     nxt = request.values.get("next", "")
     if not nxt.startswith("/kb") or nxt.startswith("//"):   # only local knowledge-base paths (no open redirect)
         nxt = url_for("kb.index")
-    error = None
+    error, status, user = None, 200, ""
     if request.method == "POST":
-        given = request.form.get("password", "").encode()
-        if hmac.compare_digest(given, current_app.config["KB_PASSWORD"].encode()):
-            session.clear()
-            session["kb_auth"] = True
-            return redirect(nxt)
-        current_app.logger.warning("kb sign-in failed")
-        error = "Wrong password."
-    return _page("kb_login.html", error=error, next=nxt), (401 if error else 200)
+        user = " ".join(request.form.get("username", "").split())
+        password = request.form.get("password", "")
+        if not user or not password:
+            error, status = "Enter your user name and password.", 400
+        elif len(user) > MAX_USER or len(password) > MAX_PASSWORD:
+            error, status = "User name or password is too long.", 400
+        else:
+            try:
+                ok = kb_auth.authenticate(user, password)
+            except kb_auth.AuthUnavailable as e:
+                current_app.logger.error("kb sign-in service unavailable: %s", e)
+                ok, error, status = False, "The sign-in service is not reachable. Please try again later.", 503
+            if ok:
+                minutes = current_app.config["KB_SESSION_MINUTES"]
+                session.clear()                            # fresh session on privilege change
+                session["kb_user"] = user
+                session["kb_exp"] = time.time() + minutes * 60
+                current_app.logger.info("kb sign-in ok")
+                return redirect(nxt)
+            if not error:
+                current_app.logger.warning("kb sign-in rejected")
+                error, status = "Invalid user name or password.", 401
+    return _page("kb_login.html", error=error, next=nxt, username=user), status
 
 
 @bp.post("/logout")
 def logout():
-    session.pop("kb_auth", None)
-    return redirect(url_for("kb.login"))
+    session.pop("kb_user", None)
+    session.pop("kb_exp", None)
+    return redirect(url_for("kb.index"))
 
 
-# ------------------------------------------------------------------ list + search
+# ------------------------------------------------------------------ list + search (public)
 @bp.get("")
-@login_required
 def index():
     params = request.args.to_dict()
     results = kb.search(params, _page_num())
@@ -95,9 +128,8 @@ def index():
     return _page("kb.html", results=results, params=params, stats=kb.stats(), techs=kb.technologies())
 
 
-# ------------------------------------------------------------------ details
+# ------------------------------------------------------------------ details (public)
 @bp.get("/<int:record_id>")
-@login_required
 def detail(record_id: int):
     rec = kb.get(record_id)
     if rec is None:
@@ -110,11 +142,12 @@ def detail(record_id: int):
                  techs=kb.technologies(), modal=render_template("_kb_detail.html", kb=kb, **ctx))
 
 
-# ------------------------------------------------------------------ create / edit / delete
+# ------------------------------------------------------------------ create / edit / delete (signed in)
 @bp.get("/new")
 @login_required
 def new():
-    return render_template("_kb_form.html", kb=kb, rec=None, form={}, techs=kb.technologies())
+    return render_template("_kb_form.html", kb=kb, rec=None, form={"reported_by": current_user()},
+                           techs=kb.technologies())
 
 
 @bp.get("/<int:record_id>/edit")
@@ -139,10 +172,11 @@ def save():
     except kb.KBError as e:
         return render_template("_kb_form.html", kb=kb, rec=rec, form=request.form, error=str(e),
                                techs=kb.technologies())
+    user = current_user()
     if record_id:
-        kb.update(record_id, data)
+        kb.update(record_id, data, user)
     else:
-        record_id = kb.create(data)
+        record_id = kb.create(data, user)
     saved = kb.get(record_id)
     resp = make_response(render_template("_kb_detail.html", kb=kb, rec=saved, related=kb.related(saved),
                                          notice="Saved."))

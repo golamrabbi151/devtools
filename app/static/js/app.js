@@ -168,6 +168,105 @@
     reader.readAsText(file);
   });
 
+  /* ---------- home: tool finder ---------- */
+  const toolFilter = $("#tool-filter");
+  if (toolFilter) {
+    toolFilter.addEventListener("input", () => {
+      const words = toolFilter.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let any = false;
+      $$("[data-tool-group]").forEach((group) => {
+        let shown = 0;
+        $$(".tool-card", group).forEach((card) => {
+          const ok = words.every((w) => card.dataset.toolText.includes(w));
+          card.hidden = !ok;
+          if (ok) shown++;
+        });
+        group.hidden = shown === 0;
+        any = any || shown > 0;
+      });
+      const none = $("[data-tool-none]");
+      if (none) none.hidden = any;
+    });
+    toolFilter.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { const first = $(".tool-card:not([hidden])"); if (first) first.click(); }
+    });
+  }
+
+  /* ---------- home: birthday card slider ---------- */
+  const bd = $("[data-bd]");
+  const track = bd && $("[data-bd-track]", bd);
+  if (bd && track) {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const cards = () => $$(".bd-card:not([hidden])", track);
+    const step = () => { const c = cards()[0]; return c ? c.getBoundingClientRect().width + 18 : track.clientWidth; };
+    const prev = $("[data-bd-prev]", bd), next = $("[data-bd-next]", bd);
+    const updateNav = () => {
+      const max = track.scrollWidth - track.clientWidth - 2;
+      if (prev) prev.disabled = track.scrollLeft <= 2;
+      if (next) next.disabled = track.scrollLeft >= max;
+    };
+    const go = (dir) => track.scrollBy({ left: dir * step(), behavior: reduced ? "auto" : "smooth" });
+    function show(key) {
+      $$("[data-bd-tab]", bd).forEach((t) => t.setAttribute("aria-selected", String(t.dataset.bdTab === key)));
+      let n = 0;
+      $$(".bd-card", track).forEach((c) => {
+        const ok = c.dataset.windows.split(" ").includes(key);
+        c.hidden = !ok;
+        if (ok) n++;
+      });
+      const empty = $("[data-bd-empty]", track);
+      if (empty) empty.hidden = n > 0;
+      track.scrollLeft = 0;
+      updateNav();
+    }
+    bd.addEventListener("click", (e) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (!t) return;
+      const tab = t.closest("[data-bd-tab]");
+      if (tab) { show(tab.dataset.bdTab); return; }
+      if (t.closest("[data-bd-prev]")) go(-1);
+      if (t.closest("[data-bd-next]")) go(1);
+    });
+    track.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") { e.preventDefault(); go(1); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+    });
+    track.addEventListener("scroll", updateNav, { passive: true });
+    window.addEventListener("resize", updateNav);
+    // photo failed to load (missing / blocked): fall back to the initials underneath
+    track.addEventListener("error", (e) => {
+      if (e.target instanceof HTMLImageElement && e.target.hasAttribute("data-bd-img")) e.target.remove();
+    }, true);
+    $$("img[data-bd-img]", track).forEach((img) => { if (img.complete && !img.naturalWidth) img.remove(); });
+    // gentle autoplay: pauses on hover / focus, off for reduced-motion users
+    let paused = false;
+    ["mouseenter", "focusin", "touchstart"].forEach((ev) => bd.addEventListener(ev, () => { paused = true; }, { passive: true }));
+    ["mouseleave", "focusout"].forEach((ev) => bd.addEventListener(ev, () => { paused = false; }));
+    if (!reduced) {
+      setInterval(() => {
+        if (paused || document.hidden || cards().length < 2) return;
+        if (track.scrollLeft >= track.scrollWidth - track.clientWidth - 2) track.scrollTo({ left: 0, behavior: "smooth" });
+        else go(1);
+      }, 5000);
+    }
+    updateNav();
+  }
+
+  /* ---------- knowledge base: sign-in countdown, automatic sign-out at expiry ---------- */
+  const kbSession = $("#kb-session");
+  if (kbSession) {
+    const expires = Number(kbSession.dataset.expires) * 1000;
+    const left = document.createElement("span");
+    kbSession.append(left);
+    const tick = () => {
+      const ms = expires - Date.now();
+      if (ms <= 0) { location.reload(); return; }           // server has dropped the sign-in by now
+      left.textContent = " · " + Math.ceil(ms / 60000) + " min left";
+      setTimeout(tick, Math.min(ms + 500, 30000));
+    };
+    tick();
+  }
+
   /* ---------- knowledge base: details / edit modal ---------- */
   const kbModal = $("#kb-modal");
   if (kbModal) {

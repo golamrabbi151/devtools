@@ -17,7 +17,8 @@
       <p class="muted">Try fewer or shorter words (prefixes work: <code>deser</code> finds “deserialization”), or clear the filters.</p>
     {% else %}
       <p><strong>No records yet.</strong></p>
-      <p class="muted">Add your first VA / PT finding or incident with <em>+ New record</em>.</p>
+      <p class="muted">{% if kb_user %}Add your first VA / PT finding or incident with <em>+ New record</em>.
+        {% else %}Sign in to add the first VA / PT finding or incident.{% endif %}</p>
     {% endif %}
   </div>
 {% else %}

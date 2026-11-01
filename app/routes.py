@@ -1,8 +1,10 @@
 """Generic routes: one page + one HTMX endpoint per registered tool."""
-from flask import Blueprint, abort, current_app, render_template, request
+import sqlite3
+
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 
 from .extensions import limiter
-from . import uploads
+from . import birthdays, kb, uploads
 from .registry import Result, ToolError, all_tools, get_tool
 
 bp = Blueprint("main", __name__)
@@ -17,7 +19,27 @@ def healthz():
 
 @bp.get("/")
 def index():
-    return render_template("index.html", tools=all_tools(), active=None)
+    try:
+        kb_stats = kb.stats()
+    except sqlite3.Error:                      # the home page must render even if the KB file is unavailable
+        kb_stats = None
+    return render_template("index.html", tools=all_tools(), active=None, bd=birthdays.for_home(),
+                           windows=birthdays.WINDOWS, kb_stats=kb_stats)
+
+
+# ------------------------------------------------------------------ dummy birthday API (until the real one)
+@bp.get("/api/birthdays")
+def birthday_api():
+    """Dummy HR API: the JSON shape the real BIRTHDAY_API_URL should return."""
+    return jsonify({"users": birthdays.dummy_users()})
+
+
+@bp.get("/api/birthdays/avatar/<int:user_id>.svg")
+def birthday_avatar(user_id: int):
+    svg = birthdays.avatar_svg(user_id)
+    if svg is None:
+        abort(404)
+    return svg, 200, {"Content-Type": "image/svg+xml; charset=utf-8"}
 
 
 @bp.get("/tool/<slug>")

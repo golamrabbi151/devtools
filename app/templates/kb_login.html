@@ -3,19 +3,27 @@
 {% block topnote %}Knowledge base · stored on this server{% endblock %}
 {% block content %}
 <div class="kb-login pane">
-  <h1>Security Knowledge Base</h1>
+  <h1>Sign in</h1>
   {% if disabled %}
-    <p>The knowledge base is disabled on this server.</p>
-    <p class="muted">An administrator must set the <code>KB_PASSWORD</code> environment variable to enable it.</p>
+    <p>Sign-in is not configured on this server, so records can be viewed but not added or changed.</p>
+    <p class="muted">An administrator must set the <code>KB_AUTH_URL</code> environment variable (the AD login API).</p>
   {% else %}
-    <p class="muted">VA / PT findings and incident solutions are sensitive. Sign in to continue.</p>
+    <p class="muted">Use your AD user name and password to add or edit Knowledge Base records.
+      You stay signed in for {{ config.KB_SESSION_MINUTES }} minutes.</p>
     {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
     <form method="post" action="{{ url_for('kb.login') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ next }}">
+      <label for="kb-username">User name</label>
+      <input id="kb-username" type="text" name="username" value="{{ username }}" maxlength="128"
+             autocomplete="username" autocapitalize="off" spellcheck="false" required {{ 'autofocus' if not username }}>
       <label for="kb-password">Password</label>
-      <input id="kb-password" type="password" name="password" autocomplete="current-password" required autofocus>
-      <div class="actions"><button type="submit" class="primary">Sign in</button></div>
+      <input id="kb-password" type="password" name="password" maxlength="256" autocomplete="current-password"
+             required {{ 'autofocus' if username }}>
+      <div class="actions">
+        <button type="submit" class="primary">Sign in</button>
+        <a href="{{ url_for('kb.index') }}">Back to the Knowledge Base</a>
+      </div>
     </form>
   {% endif %}
 </div>

@@ -56,7 +56,9 @@ CREATE TABLE IF NOT EXISTS records (
   reported_by TEXT NOT NULL DEFAULT '',
   occurred_on TEXT,
   created_at  TEXT NOT NULL,
-  updated_at  TEXT NOT NULL
+  updated_at  TEXT NOT NULL,
+  created_by  TEXT NOT NULL DEFAULT '',
+  updated_by  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS records_updated ON records(updated_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS records_fts USING fts5(
@@ -107,6 +109,11 @@ def get_db() -> sqlite3.Connection:
                     con = sqlite3.connect(path)
                     con.execute("PRAGMA journal_mode=WAL")
                     con.executescript(_SCHEMA)
+                    have = {r[1] for r in con.execute("PRAGMA table_info(records)")}
+                    for col in ("created_by", "updated_by"):          # databases made before these columns
+                        if col not in have:
+                            con.execute(f"ALTER TABLE records ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+                    con.commit()
                     con.close()
                     _initialised.add(path)
         con = sqlite3.connect(path, timeout=5)
@@ -182,23 +189,23 @@ def _check_columns(rec: dict) -> None:
         raise ValueError("unknown column")
 
 
-def create(rec: dict) -> int:
+def create(rec: dict, user: str) -> int:
     _check_columns(rec)
     con = get_db()
     now = _now()
-    cols = list(rec) + ["created_at", "updated_at"]
+    cols = list(rec) + ["created_at", "updated_at", "created_by", "updated_by"]
     with con:
         cur = con.execute(f"INSERT INTO records ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",  # nosec B608 - allow-listed columns, bound values
-                          [*rec.values(), now, now])
+                          [*rec.values(), now, now, user, user])
     return cur.lastrowid
 
 
-def update(record_id: int, rec: dict) -> bool:
+def update(record_id: int, rec: dict, user: str) -> bool:
     _check_columns(rec)
     con = get_db()
     with con:
-        cur = con.execute(f"UPDATE records SET {', '.join(f'{c} = ?' for c in rec)}, updated_at = ? WHERE id = ?",  # nosec B608 - allow-listed columns
-                          [*rec.values(), _now(), record_id])
+        cur = con.execute(f"UPDATE records SET {', '.join(f'{c} = ?' for c in rec)}, updated_at = ?, updated_by = ? "  # nosec B608 - allow-listed columns
+                          "WHERE id = ?", [*rec.values(), _now(), user, record_id])
     return cur.rowcount == 1
 
 

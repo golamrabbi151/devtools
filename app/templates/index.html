@@ -1,15 +1,127 @@
 {% extends "base.html" %}
+{% set glyphs = {"json-format": "{ }", "json-compare": "⇄", "sql-format": "SQL", "xml-format": "</>", "cron": "⏱",
+                 "base64-text": "64", "base64-image": "🖼", "certificate": "🔐", "qr-code": "▦", "jwt": "JWT",
+                 "excel-json": "XJ", "excel-sql": "XS", "lorem-ipsum": "Aa", "password": "***", "uuid": "ID"} %}
 {% block content %}
-<h1>Developer tools</h1>
-<p class="muted">Pick a tool. Everything runs on this server; tool input is never saved (only the Knowledge Base stores records).</p>
-<div class="cards">
-  <a class="card" href="{{ url_for('kb.index') }}">
-    <strong>Security Knowledge Base</strong><span>Store and search VA / PT findings and incidents with their solutions (sign-in required).</span>
-  </a>
-  {% for t in tools %}
-  <a class="card" href="{{ url_for('main.tool_page', slug=t.slug) }}">
-    <strong>{{ t.title }}</strong><span>{{ t.description }}</span>
-  </a>
-  {% endfor %}
+{# ---------------------------------------------------------------- hero #}
+<section class="hero">
+  <div class="hero-text">
+    <span class="eyebrow">DevTools Web</span>
+    <h1>Developer tools</h1>
+    <p>Pick a tool. Everything runs on this server; tool input is never saved (only the Knowledge Base stores records).</p>
+    <div class="hero-search">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <label for="tool-filter" class="sr-only">Find a tool</label>
+      <input id="tool-filter" type="search" placeholder="Find a tool… try json, sql, jwt, excel" autocomplete="off" spellcheck="false">
+    </div>
+    <ul class="hero-chips">
+      <li><strong>{{ tools | length }}</strong> tools</li>
+      <li>🔒 Processed in memory</li>
+      {% if kb_stats %}<li><strong>{{ kb_stats.total }}</strong> KB records</li>{% endif %}
+    </ul>
+  </div>
+  <div class="hero-art" aria-hidden="true">
+    <div class="code-window">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <pre><span class="t-punct">{</span>
+  <span class="t-key">"status"</span><span class="t-punct">:</span> <span class="t-str">"ready"</span><span class="t-punct">,</span>
+  <span class="t-key">"tools"</span><span class="t-punct">:</span> <span class="t-num">{{ tools | length }}</span><span class="t-punct">,</span>
+  <span class="t-key">"secure"</span><span class="t-punct">:</span> <span class="t-lit">true</span>
+<span class="t-punct">}</span></pre>
+    </div>
+  </div>
+</section>
+
+{# ---------------------------------------------------------------- birthdays #}
+<section class="bd" aria-labelledby="bd-title" data-bd data-bd-default="{{ bd.default }}">
+  <header class="bd-head">
+    <div>
+      <h2 id="bd-title"><span aria-hidden="true">🎂</span> Birthday celebrations</h2>
+      <p class="muted">Send a wish to colleagues celebrating this week.</p>
+    </div>
+    <div class="bd-tabs" role="tablist" aria-label="Birthday period">
+      {% for key, label in windows %}
+      <button type="button" role="tab" class="bd-tab" data-bd-tab="{{ key }}"
+              aria-selected="{{ 'true' if key == bd.default else 'false' }}">
+        {{ label }} <span class="bd-count">{{ bd.counts[key] }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </header>
+
+  {% if bd.error %}
+    <div class="bd-empty">{{ bd.error }}</div>
+  {% else %}
+  <div class="bd-slider">
+    <button type="button" class="bd-nav prev" data-bd-prev aria-label="Previous birthdays">‹</button>
+    <div class="bd-track" data-bd-track tabindex="0" aria-label="Birthday cards" aria-live="polite">
+      {% for p in bd.people %}
+      <article class="bd-card theme-{{ p.theme }}{{ ' is-today' if p.offset == 0 }}" data-windows="{{ p.windows }}"
+               {% if bd.default not in p.windows.split() %}hidden{% endif %}>
+        <div class="bd-confetti" aria-hidden="true"></div>
+        <span class="bd-when">{% if p.offset == 0 %}🎉 {% endif %}{{ p.when }}</span>
+        <div class="bd-avatar">
+          <span class="bd-initials" aria-hidden="true">{{ p.initials }}</span>
+          {% if p.image %}<img src="{{ p.image }}" alt="Photo of {{ p.name }}" loading="lazy" referrerpolicy="no-referrer" data-bd-img>{% endif %}
+        </div>
+        <h3 class="bd-name">{{ p.name }}</h3>
+        {% if p.designation or p.department %}
+          <p class="bd-role">{{ p.designation }}{% if p.designation and p.department %} · {% endif %}{{ p.department }}</p>
+        {% endif %}
+        <div class="bd-date">
+          <span class="bd-day">{{ p.occurs_on.day }}</span>
+          <span class="bd-month">{{ p.occurs_on.strftime('%B') }}<small>{{ p.occurs_on.strftime('%A') }}</small></span>
+        </div>
+        <blockquote class="bd-wish">{{ p.wish }}</blockquote>
+      </article>
+      {% endfor %}
+      <div class="bd-empty" data-bd-empty {% if bd.counts[bd.default] %}hidden{% endif %}>
+        <span aria-hidden="true">🎈</span> No birthdays in this period.
+      </div>
+    </div>
+    <button type="button" class="bd-nav next" data-bd-next aria-label="Next birthdays">›</button>
+  </div>
+  {% endif %}
+  {% if bd.dummy %}<p class="hint">Showing sample data from the dummy API (<code>/api/birthdays</code>). Set <code>BIRTHDAY_API_URL</code> to use the real one.</p>{% endif %}
+</section>
+
+{# ---------------------------------------------------------------- knowledge base #}
+<section class="kb-feature">
+  <div class="kb-feature-text">
+    <span class="eyebrow">Security Knowledge Base</span>
+    <h2>Solved it before? Find it in seconds.</h2>
+    <p>VA / PT findings and incidents with their solutions — Java, Python, PHP, systems, network and more.</p>
+    {% if kb_stats %}
+    <ul class="kb-feature-stats">
+      <li><strong>{{ kb_stats.total }}</strong> records</li>
+      <li><strong>{{ kb_stats.solved }}</strong> with a solution</li>
+      <li><strong>{{ kb_stats.open }}</strong> open</li>
+    </ul>
+    {% endif %}
+  </div>
+  <form class="kb-feature-search" method="get" action="{{ url_for('kb.index') }}">
+    <label for="kb-home-q" class="sr-only">Search the Knowledge Base</label>
+    <input id="kb-home-q" type="search" name="q" maxlength="300" placeholder="e.g. log4j, SQL injection, CVE-2021-44228" autocomplete="off">
+    <button type="submit">Search</button>
+  </form>
+</section>
+
+{# ---------------------------------------------------------------- tools #}
+<div data-tool-groups>
+{% for group in tools | map(attribute="group") | unique %}
+  <section class="tool-group" data-tool-group>
+    <h2 class="tool-group-title">{{ group }}</h2>
+    <div class="tool-grid">
+      {% for t in tools if t.group == group %}
+      <a class="tool-card" href="{{ url_for('main.tool_page', slug=t.slug) }}" data-tool-text="{{ (t.title ~ ' ' ~ t.description ~ ' ' ~ t.slug) | lower }}">
+        <span class="tool-glyph g{{ loop.index0 % 6 }}" aria-hidden="true">{{ glyphs.get(t.slug, t.title[:2]) }}</span>
+        <span class="tool-body"><strong>{{ t.title }}</strong><span>{{ t.description }}</span></span>
+        <span class="tool-arrow" aria-hidden="true">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endfor %}
 </div>
+<p class="tool-none muted" data-tool-none hidden>No tool matches your search.</p>
 {% endblock %}

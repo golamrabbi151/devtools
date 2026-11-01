@@ -8,11 +8,16 @@
     <p class="muted">VA / PT findings and incidents with their solutions. Search before you fix: it may have been solved before.</p>
   </div>
   <div class="kb-head-actions">
-    <button type="button" class="primary" hx-get="{{ url_for('kb.new') }}" hx-target="#kb-modal-body">+ New record</button>
-    <form method="post" action="{{ url_for('kb.logout') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="ghost">Sign out</button>
-    </form>
+    {% if kb_user %}
+      <span class="kb-user muted small" id="kb-session" data-expires="{{ kb_exp }}">Signed in as <strong>{{ kb_user }}</strong></span>
+      <button type="button" class="primary" hx-get="{{ url_for('kb.new') }}" hx-target="#kb-modal-body">+ New record</button>
+      <form method="post" action="{{ url_for('kb.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ghost">Sign out</button>
+      </form>
+    {% else %}
+      <a class="btn primary" href="{{ url_for('kb.login') }}">Sign in to add records</a>
+    {% endif %}
   </div>
 </div>
 

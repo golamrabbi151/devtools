@@ -21,7 +21,10 @@
     {% if rec.occurred_on %}<div><dt>Occurred</dt><dd>{{ rec.occurred_on }}</dd></div>{% endif %}
     {% if rec.reported_by %}<div><dt>Reported by</dt><dd>{{ rec.reported_by }}</dd></div>{% endif %}
     {% if rec.tags %}<div><dt>Tags</dt><dd>{% for t in rec.tags.split(', ') %}<span class="tag">#{{ t }}</span>{% endfor %}</dd></div>{% endif %}
-    <div><dt>Updated</dt><dd>{{ rec.updated_at }} UTC</dd></div>
+    <div><dt>Added</dt><dd>{{ rec.created_at }} UTC{% if rec.created_by %} by {{ rec.created_by }}{% endif %}</dd></div>
+    {% if rec.updated_at != rec.created_at %}
+    <div><dt>Last edited</dt><dd>{{ rec.updated_at }} UTC{% if rec.updated_by %} by {{ rec.updated_by }}{% endif %}</dd></div>
+    {% endif %}
   </dl>
 
   {% for field, heading in (("description", "Description / symptoms"), ("root_cause", "Root cause")) %}
@@ -60,12 +63,14 @@
   {% endif %}
 
   <footer class="kb-modal-foot">
+    {% if kb_user %}
     <button type="button" class="primary" hx-get="{{ url_for('kb.edit', record_id=rec.id) }}" hx-target="#kb-modal-body">Edit</button>
     <form hx-post="{{ url_for('kb.remove', record_id=rec.id) }}" hx-target="#kb-modal-body"
           hx-confirm="Delete this record permanently?">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="ghost danger">Delete</button>
     </form>
+    {% endif %}
     <button type="button" class="ghost" data-kb-close>Close</button>
   </footer>
 </div>
