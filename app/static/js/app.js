@@ -168,6 +168,207 @@
     reader.readAsText(file);
   });
 
+  /* ---------- find in pane (input textarea / output code), like an editor's Ctrl+F ----------
+     Matches are highlighted with the CSS Custom Highlight API (Range objects, no DOM rewriting).
+     The textarea is searched through .ed-backdrop: a transparent copy of its text drawn underneath it.
+     Everything happens in the browser; nothing is sent to the server. */
+  const FIND_MAX = 5000;
+  const canHighlight = typeof CSS !== "undefined" && CSS.highlights && typeof Highlight === "function";
+  const finders = [];
+
+  function refreshHighlights() {
+    if (!canHighlight) return;
+    const all = [], cur = [];
+    finders.forEach((f) => {
+      if (!f.open) return;
+      f.ranges.forEach((r, i) => (i === f.index ? cur : all).push(r));
+    });
+    CSS.highlights.set("find", new Highlight(...all));
+    CSS.highlights.set("find-current", new Highlight(...cur));
+  }
+
+  // Map [start, end) offsets in root's text to Range objects (matches may span several <span>s).
+  function rangesFor(root, spans) {
+    const out = [];
+    if (!spans.length) return out;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node, pos = 0, i = 0, range = null;
+    while ((node = walker.nextNode()) && i < spans.length) {
+      const len = node.nodeValue.length, end = pos + len;
+      while (i < spans.length) {
+        const [s, e] = spans[i];
+        if (!range) {
+          if (s >= end) break;
+          range = document.createRange();
+          range.setStart(node, s - pos);
+        }
+        if (e <= end) { range.setEnd(node, e - pos); out.push(range); range = null; i++; }
+        else break;                                    // match continues in the next text node
+      }
+      pos = end;
+    }
+    return out;
+  }
+
+  function makeFinder(pane) {
+    const bar = $("[data-find-bar]", pane), input = $("[data-find-input]", pane), count = $("[data-find-count]", pane);
+    const isInput = pane.dataset.findSource === "input";
+    const f = { pane, open: false, ranges: [], spans: [], index: -1, caseSensitive: false, regex: false };
+
+    const textarea = () => $("textarea", pane);
+    const backdrop = () => $(".ed-backdrop", pane);
+    const root = () => (isInput ? backdrop() : $("#out", pane));
+    const scroller = () => (isInput ? textarea() : $(".editor.out", pane));
+
+    function syncBackdrop() {
+      const ta = textarea(), bd = backdrop();
+      if (!ta || !bd) return;
+      bd.scrollTop = ta.scrollTop;
+      bd.scrollLeft = ta.scrollLeft;
+    }
+    function matches(text, q) {
+      const spans = [];
+      if (!q) return spans;
+      if (f.regex) {
+        let re;
+        try { re = new RegExp(q, f.caseSensitive ? "g" : "gi"); } catch { return null; }
+        let m;
+        while ((m = re.exec(text)) && spans.length < FIND_MAX) {
+          if (m[0].length === 0) { re.lastIndex++; continue; }
+          spans.push([m.index, m.index + m[0].length]);
+        }
+      } else {
+        const hay = f.caseSensitive ? text : text.toLowerCase(), needle = f.caseSensitive ? q : q.toLowerCase();
+        let at = hay.indexOf(needle);
+        while (at !== -1 && spans.length < FIND_MAX) { spans.push([at, at + needle.length]); at = hay.indexOf(needle, at + needle.length); }
+      }
+      return spans;
+    }
+    function run(keepPosition) {
+      const el = root();
+      if (isInput && el) { el.textContent = textarea().value; syncBackdrop(); }
+      const q = input.value;
+      const spans = el ? matches(el.textContent, q) : [];
+      input.classList.toggle("no-match", !!q && (!spans || spans.length === 0));
+      if (spans === null) { f.ranges = []; f.index = -1; count.textContent = "Bad pattern"; refreshHighlights(); return; }
+      const prevStart = keepPosition && f.spans[f.index] ? f.spans[f.index][0] : 0;
+      f.spans = spans;
+      f.ranges = el ? rangesFor(el, spans) : [];
+      f.index = spans.length ? Math.max(0, spans.findIndex(([s]) => s >= prevStart)) : -1;
+      if (f.index === -1 && spans.length) f.index = 0;
+      show(!keepPosition);
+    }
+    function show(scroll) {
+      const n = f.spans.length;
+      count.textContent = !input.value ? "" : n === 0 ? "No results"
+        : `${f.index + 1} of ${n >= FIND_MAX ? FIND_MAX + "+" : n}`;
+      refreshHighlights();
+      if (scroll !== false) scrollToCurrent();
+    }
+    function scrollToCurrent() {
+      const r = f.ranges[f.index], box = scroller();
+      if (!r || !box) return;
+      const rect = r.getBoundingClientRect(), view = box.getBoundingClientRect();
+      const gutter = isInput ? 0 : (($(".gutter", box) || {}).offsetWidth || 0);
+      const top = rect.top - view.top, left = rect.left - view.left;
+      if (top < 0 || top + rect.height > box.clientHeight) box.scrollTop += top - box.clientHeight / 2;
+      if (left < gutter || left + rect.width > box.clientWidth) box.scrollLeft += left - gutter - (box.clientWidth - gutter) / 3;
+      if (isInput) syncBackdrop();
+    }
+    function step(dir) {
+      const n = f.spans.length;
+      if (!n) return;
+      f.index = (f.index + dir + n) % n;
+      show(true);
+    }
+    function openBar() {
+      f.open = true;
+      bar.hidden = false;
+      const ta = textarea();
+      // pre-fill with the selected text (textarea selection, or a selection inside the output)
+      let sel = "";
+      if (isInput && ta && ta.selectionEnd > ta.selectionStart) sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+      if (!isInput) { const s = window.getSelection(); if (s && root() && root().contains(s.anchorNode)) sel = String(s); }
+      if (sel && !sel.includes("\n") && sel.length <= 200) input.value = sel;
+      input.focus();
+      input.select();
+      run(false);
+    }
+    function closeBar() {
+      f.open = false;
+      bar.hidden = true;
+      f.ranges = []; f.spans = []; f.index = -1;
+      const bd = backdrop();
+      if (isInput && bd) bd.textContent = "";                      // drop the copy until the next search
+      refreshHighlights();
+      const back = isInput ? textarea() : scroller();
+      if (back) back.focus({ preventScroll: true });
+    }
+
+    let timer = 0;
+    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => run(false), 120); });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
+      else if (e.key === "Escape") { e.preventDefault(); closeBar(); }
+      else if (e.key === "F3") { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
+    });
+    pane.addEventListener("click", (e) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (!t) return;
+      if (t.closest("[data-find-open]")) { f.open && document.activeElement === input ? closeBar() : openBar(); }
+      else if (t.closest("[data-find-next]")) step(1);
+      else if (t.closest("[data-find-prev]")) step(-1);
+      else if (t.closest("[data-find-close]")) closeBar();
+      else if (t.closest("[data-find-case], [data-find-regex]")) {
+        const b = t.closest(".find-opt");
+        const on = b.getAttribute("aria-pressed") !== "true";
+        b.setAttribute("aria-pressed", String(on));
+        if (b.hasAttribute("data-find-case")) f.caseSensitive = on; else f.regex = on;
+        run(false);
+        input.focus();
+      }
+    });
+    if (isInput) {
+      const ta = textarea();
+      if (ta) {
+        ta.addEventListener("scroll", syncBackdrop, { passive: true });
+        ta.addEventListener("input", () => { if (f.open) { clearTimeout(timer); timer = setTimeout(() => run(true), 150); } });
+      }
+    }
+    f.openBar = openBar;
+    f.rerun = () => { if (f.open) run(false); };
+    return f;
+  }
+
+  $$("[data-find-pane]").forEach((pane) => finders.push(makeFinder(pane)));
+  if (finders.length) {
+    // Ctrl/Cmd+F inside a pane opens that pane's search instead of the browser's page search
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "f" || e.shiftKey || e.altKey) return;
+      const pane = e.target instanceof Element && e.target.closest("[data-find-pane]");
+      const f = pane && finders.find((x) => x.pane === pane);
+      if (f) { e.preventDefault(); f.openBar(); }
+    });
+    // new output arrived: search it again
+    document.body.addEventListener("htmx:afterSwap", (e) => {
+      if (e.target && e.target.id === "result") finders.forEach((f) => f.pane.contains(e.target) && f.rerun());
+    });
+    // input status bar: cursor position, lines, characters
+    const ta = $("[data-find-source='input'] textarea"), status = $("[data-input-status]");
+    if (ta && status) {
+      const update = () => {
+        const v = ta.value, pos = ta.selectionStart || 0;
+        if (v.length > 2_000_000) { status.textContent = v.length.toLocaleString() + " chars"; return; }
+        const before = v.slice(0, pos), line = before.split("\n").length;
+        const col = pos - before.lastIndexOf("\n");
+        const lines = v ? v.split("\n").length : 1;
+        status.textContent = `Ln ${line}, Col ${col} · ${lines.toLocaleString()} line${lines === 1 ? "" : "s"} · ${v.length.toLocaleString()} chars`;
+      };
+      ["input", "keyup", "click", "select"].forEach((ev) => ta.addEventListener(ev, update));
+      update();
+    }
+  }
+
   /* ---------- home: tool finder ---------- */
   const toolFilter = $("#tool-filter");
   if (toolFilter) {
@@ -250,6 +451,35 @@
       }, 5000);
     }
     updateNav();
+  }
+
+  /* ---------- sign-in page: show/hide password, Caps Lock hint, no double submit ---------- */
+  const authForm = $("[data-auth-form]");
+  if (authForm) {
+    const eye = $("[data-toggle-password]", authForm), pw = eye && $(eye.dataset.togglePassword);
+    if (eye && pw) {
+      eye.addEventListener("click", () => {
+        const show = pw.type === "password";
+        pw.type = show ? "text" : "password";
+        eye.setAttribute("aria-pressed", String(show));
+        eye.setAttribute("aria-label", show ? "Hide password" : "Show password");
+        pw.focus();
+      });
+    }
+    const caps = $("[data-caps-warning]", authForm);
+    const checkCaps = (e) => { if (caps && e.getModifierState) caps.hidden = !e.getModifierState("CapsLock"); };
+    if (pw) { pw.addEventListener("keydown", checkCaps); pw.addEventListener("keyup", checkCaps); pw.addEventListener("blur", () => { if (caps) caps.hidden = true; }); }
+    const submit = $("[data-auth-submit]", authForm), label = $("[data-auth-label]", authForm);
+    authForm.addEventListener("submit", () => {
+      if (pw) pw.type = "password";                           // never leave the password visible on the way out
+      if (submit) { submit.disabled = true; submit.classList.add("is-busy"); }
+      if (label) label.textContent = "Signing in…";
+    });
+    // coming back with the browser's Back button: re-enable the form
+    window.addEventListener("pageshow", () => {
+      if (submit) { submit.disabled = false; submit.classList.remove("is-busy"); }
+      if (label) label.textContent = "Sign in";
+    });
   }
 
   /* ---------- knowledge base: sign-in countdown, automatic sign-out at expiry ---------- */

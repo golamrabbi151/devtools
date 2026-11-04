@@ -1,7 +1,7 @@
 """Knowledge base sign-in against the company AD login API.
 
 POST {"userId", "password", "channelCode"} as JSON to KB_AUTH_URL. The user is valid when the reply has
-responseCode == 100 and isValidUser == 1 (numbers or strings are both accepted).
+responseCode == 100 and isValidUser is true (true, 1, "1" and "true" are all accepted).
 The password is sent only to that API (HTTPS required), never stored and never logged.
 """
 import json
@@ -56,4 +56,9 @@ def authenticate(user: str, password: str) -> bool:
         raise AuthUnavailable("reply is not JSON")
     if not isinstance(reply, dict):
         raise AuthUnavailable("unexpected reply")
-    return str(reply.get("responseCode")) == "100" and str(reply.get("isValidUser")) == "1"
+    return str(reply.get("responseCode")) == "100" and _is_true(reply.get("isValidUser"))
+
+
+def _is_true(value) -> bool:
+    """isValidUser may come back as true, 1, "1" or "true" depending on the API version."""
+    return value is True or str(value).strip().lower() in ("1", "true")

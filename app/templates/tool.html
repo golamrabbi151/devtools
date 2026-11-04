@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import editor, opt, stacked, open_file %}
+{% from "_macros.html" import editor, opt, stacked, open_file, search_bar %}
 {% block title %}{{ tool.title }} · DevTools Web{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -28,20 +28,33 @@
     </div>
   </div>
   <div class="split">
-    <section class="panel">
+    {# Both panes share one structure (header · find bar · body · status bar) and one fixed height. #}
+    <section class="panel io-pane" data-find-pane data-find-source="input">
       <header class="panel-head">
         <h2>{{ main.label }}</h2>
         <div class="head-tools">
           {% if tool.sample %}<button type="button" class="tool-btn" data-sample='{{ tool.sample | tojson }}'>Sample</button>{% endif %}
           {{ open_file(main, tool) }}
           <button type="button" class="tool-btn" data-clear-field="#f-{{ main.name }}">Clear</button>
+          <button type="button" class="tool-btn" data-find-open title="Search (Ctrl+F)">Search</button>
         </div>
       </header>
+      {{ search_bar("input") }}
       {{ editor(main) }}
+      <footer class="panel-foot" data-input-status>Ln 1, Col 1</footer>
     </section>
-    <section class="panel" aria-live="polite">
-      <header class="panel-head"><h2>Output</h2></header>
-      <div id="result" class="result"><p class="muted pad">Output appears here.</p></div>
+    <section class="panel io-pane" data-find-pane data-find-source="output">
+      <header class="panel-head">
+        <h2>Output</h2>
+        <div class="head-tools">
+          <button type="button" class="tool-btn" data-copy="#out">Copy</button>
+          <button type="button" class="tool-btn" data-download="#out" data-filename="result.{{ tool.ext }}">Download</button>
+          <button type="button" class="tool-btn" data-find-open title="Search (Ctrl+F)">Search</button>
+        </div>
+      </header>
+      {{ search_bar("output") }}
+      <div id="result" class="result" aria-live="polite"><p class="muted pad">Output appears here.</p></div>
+      <footer class="panel-foot" id="out-status">Ready</footer>
     </section>
   </div>
 

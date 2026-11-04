@@ -336,10 +336,28 @@ def test_cron_escapes_and_rejects_hostile_input(run):
     assert "<script" not in t
 
 
-def test_download_and_copy_buttons_on_output(run):
+def test_download_and_copy_buttons_on_output(client, run):
+    page = client.get("/tool/json-format").get_data(as_text=True)          # in the Output pane header
+    assert 'data-download="#out"' in page and 'data-filename="result.json"' in page and 'data-copy="#out"' in page
     t = run("json-format", input="{}", action="format").get_data(as_text=True)
-    assert "data-download=" in t and 'data-filename="result.json"' in t and "data-copy=" in t
-    assert 'class="gutter"' in t
+    assert 'class="gutter"' in t and '<pre id="out" class="hl">' in t
+
+
+def test_split_panes_share_structure_and_have_search(client):
+    for slug in ("json-format", "xml-format", "sql-format"):
+        page = client.get(f"/tool/{slug}").get_data(as_text=True)
+        assert page.count('class="panel io-pane"') == 2, slug              # same structure, same fixed height
+        assert page.count("data-find-bar") == 2 and page.count("data-find-open") == 2, slug
+        assert page.count('class="panel-foot"') == 2 and 'class="ed-backdrop"' in page, slug
+
+
+def test_split_result_updates_status_bar(run):
+    t = run("json-format", input='{"a": [1, 2]}', action="format", indent="2").get_data(as_text=True)
+    assert 'id="out-status" hx-swap-oob="true"' in t and "6 lines" in t and "out-bar" not in t
+    t = run("json-format", input="{}", action="validate").get_data(as_text=True)
+    assert "Valid JSON" in t
+    t = run("json-format", input="{bad", action="format").get_data(as_text=True)
+    assert 'class="error"' in t and 'class="panel-foot is-error"' in t
 
 
 def test_field_options_only_on_select():

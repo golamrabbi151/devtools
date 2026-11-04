@@ -2,13 +2,13 @@
 
 Access: anyone can list, search and read records. Adding, editing and deleting need a sign-in
 against the AD login API (app/kb_auth.py). A sign-in lasts KB_SESSION_MINUTES (default 30) from the
-moment of login; after that the session is dropped and the user is signed out.
+moment of login; after that the server-side session is dropped and the user is signed out.
 """
 import json
 import time
 from functools import wraps
 
-from flask import (Blueprint, abort, current_app, make_response, redirect, render_template, request,
+from flask import (Blueprint, abort, current_app, g, make_response, redirect, render_template, request,
                    session, url_for)
 
 from . import kb, kb_auth
@@ -20,21 +20,39 @@ MAX_USER, MAX_PASSWORD = 128, 256
 
 
 # ------------------------------------------------------------------ session
+# The sign-in is a server-side session: the cookie carries only a random 256-bit token; the database holds
+# its SHA-256 with the user name and expiry. Nothing in the cookie can be forged or edited (even with the
+# SECRET_KEY), signing out revokes the token immediately, and the user name is never sent to the browser.
+def _cookie_name() -> str:
+    return current_app.config["KB_SESSION_COOKIE"]
+
+
+def _session() -> tuple[str, float] | None:
+    if "kb_sess" not in g:
+        g.kb_sess = kb.session_lookup(request.cookies.get(_cookie_name(), ""), time.time())
+    return g.kb_sess
+
+
 def current_user() -> str | None:
-    """Signed-in user name, or None. An expired sign-in is cleared here (= automatic sign-out)."""
-    user, exp = session.get("kb_user"), session.get("kb_exp", 0)
-    if user and time.time() < exp:
-        return user
-    if user:
-        session.pop("kb_user", None)
-        session.pop("kb_exp", None)
-    return None
+    """Signed-in user name, or None (no cookie, unknown / revoked token, or past its expiry)."""
+    sess = _session()
+    return sess[0] if sess else None
 
 
 @bp.app_context_processor
 def _inject_user():
-    user = current_user() if request.blueprint == "kb" else None
-    return {"kb_user": user, "kb_exp": int(session.get("kb_exp", 0)) if user else 0}
+    sess = _session() if request.blueprint == "kb" else None
+    return {"kb_user": sess[0] if sess else None, "kb_exp": int(sess[1]) if sess else 0}
+
+
+def _set_session_cookie(resp, token: str, max_age: int):
+    resp.set_cookie(_cookie_name(), token, max_age=max_age, path="/", httponly=True,
+                    secure=current_app.config["SESSION_COOKIE_SECURE"], samesite="Strict")
+
+
+def _clear_session_cookie(resp):
+    resp.delete_cookie(_cookie_name(), path="/", httponly=True,
+                       secure=current_app.config["SESSION_COOKIE_SECURE"], samesite="Strict")
 
 
 def _page(template, **ctx):
@@ -99,12 +117,15 @@ def login():
                 current_app.logger.error("kb sign-in service unavailable: %s", e)
                 ok, error, status = False, "The sign-in service is not reachable. Please try again later.", 503
             if ok:
-                minutes = current_app.config["KB_SESSION_MINUTES"]
-                session.clear()                            # fresh session on privilege change
-                session["kb_user"] = user
-                session["kb_exp"] = time.time() + minutes * 60
+                lifetime = current_app.config["KB_SESSION_MINUTES"] * 60
+                old = request.cookies.get(_cookie_name(), "")
+                kb.session_delete(old)                     # a previous token never survives a new sign-in
+                token, _expires = kb.session_create(user, time.time(), lifetime)
+                session.pop("csrf_token", None)            # new CSRF token after the privilege change
                 current_app.logger.info("kb sign-in ok")
-                return redirect(nxt)
+                resp = redirect(nxt)
+                _set_session_cookie(resp, token, lifetime)
+                return resp
             if not error:
                 current_app.logger.warning("kb sign-in rejected")
                 error, status = "Invalid user name or password.", 401
@@ -113,9 +134,12 @@ def login():
 
 @bp.post("/logout")
 def logout():
-    session.pop("kb_user", None)
-    session.pop("kb_exp", None)
-    return redirect(url_for("kb.index"))
+    kb.session_delete(request.cookies.get(_cookie_name(), ""))   # revoke on the server, not just in the browser
+    g.pop("kb_sess", None)
+    session.pop("csrf_token", None)
+    resp = redirect(url_for("kb.index"))
+    _clear_session_cookie(resp)
+    return resp
 
 
 # ------------------------------------------------------------------ list + search (public)

@@ -1,4 +1,5 @@
 """Security knowledge base: public reading, AD sign-in + 30 min session, CRUD, search, escaping."""
+import hashlib
 import html
 import io
 import json
@@ -141,6 +142,73 @@ def test_session_expires_after_30_minutes(kbc, monkeypatch):
     assert kbc.get("/kb/new").status_code == 302                          # stays signed out
 
 
+# ------------------------------------------------------------------ session security
+def _set_cookie_header(resp, name):
+    return next(h for h in resp.headers.getlist("Set-Cookie") if h.startswith(name + "="))
+
+
+def test_session_cookie_is_random_token_with_safe_flags(client, ad, app):
+    r = sign_in(client)
+    header = _set_cookie_header(r, "kb_session")
+    token = header.split(";")[0].split("=", 1)[1]
+    assert len(token) >= 43 and "rabbi" not in header                      # 256-bit random, no user data
+    flags = header.lower()
+    assert "httponly" in flags and "samesite=strict" in flags and "path=/" in flags and "max-age=1800" in flags
+    with client.session_transaction() as s:                               # nothing about the user in Flask's cookie
+        assert "kb_user" not in s and "kb_exp" not in s
+    with app.app_context():                                               # DB keeps only a hash of the token
+        rows = kb.get_db().execute("SELECT token_hash, username FROM sessions").fetchall()
+    assert [r["username"] for r in rows] == ["rabbi"]
+    assert rows[0]["token_hash"] == hashlib.sha256(token.encode()).hexdigest() and token not in rows[0]["token_hash"]
+
+
+def test_forged_or_unknown_cookies_are_refused(app, client):
+    signer = app.session_interface.get_signing_serializer(app)              # attacker who knows SECRET_KEY
+    client.set_cookie("session", signer.dumps({"kb_user": "attacker", "kb_exp": time.time() + 3600}))
+    client.set_cookie("kb_session", "A" * 43)
+    assert client.get("/kb/new").status_code == 302
+    client.set_cookie("kb_session", "x" * 3000)                           # oversized: ignored, no error
+    assert client.get("/kb/new").status_code == 302
+
+
+def test_sign_out_revokes_token_on_server(app, client, ad):
+    token = _set_cookie_header(sign_in(client), "kb_session").split(";")[0].split("=", 1)[1]
+    assert client.get("/kb/new").status_code == 200
+    r = client.post("/kb/logout", data={"csrf_token": token_for(client)})
+    assert "kb_session=;" in _set_cookie_header(r, "kb_session")           # browser told to drop it
+    thief = app.test_client()                                             # a copied cookie no longer works
+    thief.set_cookie("kb_session", token)
+    assert thief.get("/kb/new").status_code == 302
+
+
+def test_new_sign_in_replaces_old_token(app, client, ad):
+    first = _set_cookie_header(sign_in(client), "kb_session").split(";")[0].split("=", 1)[1]
+    second = _set_cookie_header(sign_in(client), "kb_session").split(";")[0].split("=", 1)[1]
+    assert first != second
+    other = app.test_client()
+    other.set_cookie("kb_session", first)
+    assert other.get("/kb/new").status_code == 302
+
+
+def test_expired_sessions_are_deleted(app, kbc, monkeypatch):
+    real = time.time
+    monkeypatch.setattr(kb_routes.time, "time", lambda: real() + 31 * 60)
+    assert kbc.get("/kb/new").status_code == 302
+    with app.app_context():
+        assert kb.get_db().execute("SELECT count(*) FROM sessions").fetchone()[0] == 0
+
+
+def test_production_cookies_use_host_prefix_and_dev_key_is_not_fixed():
+    from app.config import DevelopmentConfig, ProductionConfig
+    assert ProductionConfig.KB_SESSION_COOKIE == "__Host-kb_session" and ProductionConfig.SESSION_COOKIE_NAME == "__Host-session"
+    assert ProductionConfig.SESSION_COOKIE_SECURE is True
+    assert DevelopmentConfig.SECRET_KEY != "dev-only-insecure-key" and len(DevelopmentConfig.SECRET_KEY) >= 32
+
+
+def token_for(client):
+    return token(client, "/kb/login")
+
+
 def test_sign_in_disabled_without_api_url(app, client):
     app.config["KB_AUTH_URL"] = ""
     assert client.get("/kb").status_code == 200                           # reading still works
@@ -178,12 +246,14 @@ def test_api_success_and_request_shape(api):
     assert kb_auth.authenticate("rabbi", "pw") is True
     assert sent["body"] == {"userId": "rabbi", "password": "pw", "channelCode": "USERCODE"}
     assert sent["headers"]["Content-type"] == "application/json" and sent["timeout"] == kb_auth.TIMEOUT_S
-    api({"responseCode": "100", "isValidUser": "1"})                      # string values are fine too
-    assert kb_auth.authenticate("rabbi", "pw") is True
+    for valid in ("1", True, "true", "True"):                              # all forms the API may use
+        api({"responseCode": "100", "isValidUser": valid})
+        assert kb_auth.authenticate("rabbi", "pw") is True, valid
 
 
 @pytest.mark.parametrize("reply", [{"responseCode": 100, "isValidUser": 0}, {"responseCode": 101, "isValidUser": 1},
-                                   {"isValidUser": 1}, {}])
+                                   {"responseCode": 100, "isValidUser": False}, {"responseCode": 100, "isValidUser": "false"},
+                                   {"responseCode": 100, "isValidUser": None}, {"isValidUser": True}, {}])
 def test_api_rejections(api, reply):
     api(reply)
     assert kb_auth.authenticate("rabbi", "pw") is False

@@ -40,7 +40,10 @@ A searchable store of **VA / PT findings and incidents with their solutions**, f
   (POST JSON `{"userId", "password", "channelCode"}`; valid when the reply has `responseCode` 100 and
   `isValidUser` 1). A sign-in lasts `KB_SESSION_MINUTES` (default **30**) from login, then the user is signed
   out automatically (the page shows the minutes left). Passwords are only forwarded to the API over HTTPS,
-  never stored or logged. Records show who added and last edited them. Sign-in is rate limited (10/min), all
+  never stored or logged. Sessions are **server-side**: the `kb_session` cookie (`__Host-kb_session` in
+  production; HttpOnly, Secure, SameSite=Strict) holds only a random 256-bit token, and the database keeps
+  only its SHA-256 with the user name and expiry, so cookies cannot be forged or edited, sign-out revokes the
+  token at once, and a copied database cannot be used to sign in. Records show who added and last edited them. Sign-in is rate limited (10/min), all
   writes are CSRF-protected and all text is stored and shown as escaped plain text. Without `KB_AUTH_URL`
   the KB is read-only.
 - **Storage:** one SQLite file, `instance/kb.sqlite3` by default (`KB_DB_PATH` to change it). WAL mode, safe for

@@ -1,5 +1,6 @@
 """Application configuration. Secrets come from the environment only."""
 import os
+import secrets
 
 
 MB = 1024 * 1024
@@ -53,6 +54,7 @@ class Config:
     KB_AUTH_URL = os.environ.get("KB_AUTH_URL", "")                 # AD login API (https); empty = no sign-in
     KB_AUTH_CHANNEL = os.environ.get("KB_AUTH_CHANNEL", "USERCODE")  # "channelCode" sent to the API
     KB_SESSION_MINUTES = max(1, min(int(os.environ.get("KB_SESSION_MINUTES", "30") or 30), 24 * 60))
+    KB_SESSION_COOKIE = "kb_session"            # holds only a random token; the session itself is server-side
     KB_DB_PATH = os.environ.get("KB_DB_PATH", "")   # default: <instance folder>/kb.sqlite3
 
     # ---- Birthday cards on the home page. Empty URL = built-in dummy data (/api/birthdays). ----
@@ -65,13 +67,19 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = False  # keep the Werkzeug debugger off even locally (it is an RCE vector)
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key")
+    # No fixed fallback key: a key published in the source would let anyone forge cookies. Without
+    # SECRET_KEY a random one is made per run (forms opened before a restart then need a reload).
+    SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
     SESSION_COOKIE_SECURE = False
     WTF_CSRF_SSL_STRICT = False
 
 
 class ProductionConfig(Config):
     SECRET_KEY = os.environ.get("SECRET_KEY")
+    # "__Host-" prefix: browsers only accept these cookies over HTTPS, for this exact host, with Path=/
+    # (no sub-domain can set or overwrite them).
+    SESSION_COOKIE_NAME = "__Host-session"
+    KB_SESSION_COOKIE = "__Host-kb_session"
 
     @classmethod
     def validate(cls):

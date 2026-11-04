@@ -11,8 +11,10 @@ All stored text is plain text and is escaped when rendered.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
+import secrets
 import sqlite3
 import threading
 from datetime import date, datetime, timezone
@@ -61,6 +63,15 @@ CREATE TABLE IF NOT EXISTS records (
   updated_by  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS records_updated ON records(updated_at);
+-- Server-side sign-in sessions. Only a SHA-256 of the cookie token is stored, so a copy of this
+-- database cannot be turned into a working session cookie.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  username   TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  expires_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS records_fts USING fts5(
   title, reference, technology, tags, asset, description, root_cause, solution,
   content='records', content_rowid='id', tokenize='porter unicode61', prefix='2 3'
@@ -207,6 +218,45 @@ def update(record_id: int, rec: dict, user: str) -> bool:
         cur = con.execute(f"UPDATE records SET {', '.join(f'{c} = ?' for c in rec)}, updated_at = ?, updated_by = ? "  # nosec B608 - allow-listed columns
                           "WHERE id = ?", [*rec.values(), _now(), user, record_id])
     return cur.rowcount == 1
+
+
+# ------------------------------------------------------------------ sign-in sessions
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def session_create(username: str, now: float, lifetime_s: int) -> tuple[str, float]:
+    """New random session token (returned once, for the cookie) and its expiry time."""
+    token = secrets.token_urlsafe(32)                     # 256 bits from the OS CSPRNG
+    expires = now + lifetime_s
+    con = get_db()
+    with con:
+        con.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))      # housekeeping
+        con.execute("INSERT INTO sessions (token_hash, username, created_at, expires_at) VALUES (?, ?, ?, ?)",
+                    (_token_hash(token), username, now, expires))
+    return token, expires
+
+
+def session_lookup(token: str, now: float) -> tuple[str, float] | None:
+    """(username, expires_at) for a live session, else None. Expired sessions are deleted."""
+    if not token or len(token) > 128:
+        return None
+    con = get_db()
+    row = con.execute("SELECT username, expires_at FROM sessions WHERE token_hash = ?", (_token_hash(token),)).fetchone()
+    if row is None:
+        return None
+    if row["expires_at"] <= now:
+        with con:
+            con.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
+        return None
+    return row["username"], row["expires_at"]
+
+
+def session_delete(token: str) -> None:
+    if token and len(token) <= 128:
+        con = get_db()
+        with con:
+            con.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
 
 
 def delete(record_id: int) -> bool:

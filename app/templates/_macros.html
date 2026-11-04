@@ -3,8 +3,27 @@
 {% macro editor(f) -%}
 <div class="editor" data-editor>
   <pre class="gutter" aria-hidden="true">1</pre>
-  <textarea id="f-{{ f.name }}" name="{{ f.name }}" wrap="off" spellcheck="false" autocomplete="off"
-            autocapitalize="off" placeholder="{{ f.placeholder }}" aria-label="{{ f.label }}">{{ f.default }}</textarea>
+  <div class="ed-wrap">
+    {# mirror of the textarea text, drawn underneath it: lets search highlight matches inside the textarea #}
+    <pre class="ed-backdrop" aria-hidden="true"></pre>
+    <textarea id="f-{{ f.name }}" name="{{ f.name }}" wrap="off" spellcheck="false" autocomplete="off"
+              autocapitalize="off" placeholder="{{ f.placeholder }}" aria-label="{{ f.label }}">{{ f.default }}</textarea>
+  </div>
+</div>
+{%- endmacro %}
+
+{# Find bar for a panel (opened with its Search button or Ctrl+F). Search runs in the browser only. #}
+{% macro search_bar(label) -%}
+<div class="find-bar" data-find-bar hidden role="search" aria-label="Search {{ label }}">
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  <input type="search" class="find-input" data-find-input placeholder="Search {{ label }}…" aria-label="Search {{ label }}"
+         autocomplete="off" spellcheck="false">
+  <span class="find-count" data-find-count aria-live="polite"></span>
+  <button type="button" class="find-btn" data-find-prev title="Previous match (Shift+Enter)" aria-label="Previous match">↑</button>
+  <button type="button" class="find-btn" data-find-next title="Next match (Enter)" aria-label="Next match">↓</button>
+  <button type="button" class="find-btn find-opt" data-find-case aria-pressed="false" title="Match case" aria-label="Match case">Aa</button>
+  <button type="button" class="find-btn find-opt" data-find-regex aria-pressed="false" title="Regular expression" aria-label="Regular expression">.*</button>
+  <button type="button" class="find-btn" data-find-close title="Close (Esc)" aria-label="Close search">×</button>
 </div>
 {%- endmacro %}
 

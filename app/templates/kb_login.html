@@ -1,30 +1,75 @@
 {% extends "base.html" %}
-{% block title %}Knowledge Base sign-in · DevTools Web{% endblock %}
+{% block title %}Sign in · Security Knowledge Base{% endblock %}
 {% block topnote %}Knowledge base · stored on this server{% endblock %}
 {% block content %}
-<div class="kb-login pane">
-  <h1>Sign in</h1>
-  {% if disabled %}
-    <p>Sign-in is not configured on this server, so records can be viewed but not added or changed.</p>
-    <p class="muted">An administrator must set the <code>KB_AUTH_URL</code> environment variable (the AD login API).</p>
-  {% else %}
-    <p class="muted">Use your AD user name and password to add or edit Knowledge Base records.
-      You stay signed in for {{ config.KB_SESSION_MINUTES }} minutes.</p>
-    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
-    <form method="post" action="{{ url_for('kb.login') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="next" value="{{ next }}">
-      <label for="kb-username">User name</label>
-      <input id="kb-username" type="text" name="username" value="{{ username }}" maxlength="128"
-             autocomplete="username" autocapitalize="off" spellcheck="false" required {{ 'autofocus' if not username }}>
-      <label for="kb-password">Password</label>
-      <input id="kb-password" type="password" name="password" maxlength="256" autocomplete="current-password"
-             required {{ 'autofocus' if username }}>
-      <div class="actions">
-        <button type="submit" class="primary">Sign in</button>
-        <a href="{{ url_for('kb.index') }}">Back to the Knowledge Base</a>
+<div class="auth">
+  {# ---------- brand side ---------- #}
+  <aside class="auth-brand">
+    <div class="auth-shield" aria-hidden="true">
+      <svg viewBox="0 0 64 64" width="64" height="64" focusable="false">
+        <path d="M32 4 8 13v17c0 15 10.2 26.6 24 30 13.8-3.4 24-15 24-30V13L32 4Z" fill="rgba(255,255,255,.14)" stroke="#bff0dc" stroke-width="2.5" stroke-linejoin="round"/>
+        <path d="m21 32 8 8 15-16" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <span class="eyebrow">Security Knowledge Base</span>
+    <h2>Every fix, findable.</h2>
+    <p>VA / PT findings and incident solutions for Java, Python, PHP, systems, network and more.</p>
+    <ul class="auth-points">
+      <li><span aria-hidden="true">🔎</span> Reading and searching is open to everyone</li>
+      <li><span aria-hidden="true">✍️</span> Sign in to add, edit or delete records</li>
+      <li><span aria-hidden="true">⏱</span> Sessions end automatically after {{ config.KB_SESSION_MINUTES }} minutes</li>
+    </ul>
+  </aside>
+
+  {# ---------- form side ---------- #}
+  <section class="auth-card">
+    {% if disabled %}
+      <div class="auth-icon warn" aria-hidden="true">!</div>
+      <h1>Sign-in unavailable</h1>
+      <p class="muted">Sign-in is not configured on this server, so records can be viewed but not added or changed.</p>
+      <p class="muted small">An administrator must set the <code>KB_AUTH_URL</code> environment variable (the AD login API).</p>
+      <a class="btn primary auth-wide" href="{{ url_for('kb.index') }}">Browse the Knowledge Base</a>
+    {% else %}
+      <div class="auth-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" focusable="false"><rect x="5" y="10" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg>
       </div>
-    </form>
-  {% endif %}
+      <h1>Welcome back</h1>
+      <p class="muted">Sign in with your AD (domain) account.</p>
+
+      {% if error %}<div class="auth-alert" role="alert"><span aria-hidden="true">⚠</span> {{ error }}</div>{% endif %}
+
+      <form method="post" action="{{ url_for('kb.login') }}" class="auth-form" data-auth-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <label for="kb-username">User name</label>
+        <div class="auth-field">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="kb-username" type="text" name="username" value="{{ username }}" maxlength="128" placeholder="e.g. rabbi"
+                 autocomplete="username" autocapitalize="off" spellcheck="false" required {{ 'autofocus' if not username }}>
+        </div>
+
+        <label for="kb-password">Password</label>
+        <div class="auth-field">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><rect x="5" y="10" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <input id="kb-password" type="password" name="password" maxlength="256" placeholder="Enter your password"
+                 autocomplete="current-password" required {{ 'autofocus' if username }}>
+          <button type="button" class="auth-eye" data-toggle-password="#kb-password" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+        </div>
+        <p class="auth-caps" data-caps-warning hidden><span aria-hidden="true">⇪</span> Caps Lock is on</p>
+
+        <button type="submit" class="primary auth-wide auth-submit" data-auth-submit>
+          <span class="auth-spinner" aria-hidden="true"></span><span data-auth-label>Sign in</span>
+        </button>
+      </form>
+
+      <p class="auth-foot small muted">
+        <span aria-hidden="true">🔒</span> Your password is checked by the company AD service over HTTPS and is never stored here.
+      </p>
+      <a class="auth-back" href="{{ url_for('kb.index') }}">← Back to the Knowledge Base</a>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

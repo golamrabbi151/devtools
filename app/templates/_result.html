@@ -1,7 +1,22 @@
 {# result.html / result.block are Markup objects built from escaped tokens (app/highlight.py,
    tool modules) - rendered without |safe. #}
 {% set ext = tool.ext if (tool is defined and tool) else "txt" %}
-{% if error %}
+{% if tool is defined and tool and tool.layout == "split" %}
+  {# Split tools: Copy / Download / Search live in the pane header; notes go to the pane's status bar. #}
+  {% if error %}
+    <div class="error" role="alert">{{ error }}</div>
+    <footer class="panel-foot is-error" id="out-status" hx-swap-oob="true">Error</footer>
+  {% elif result %}
+    {% set lines = [result.output.count("\n") + 1, 20000] | min %}
+    <div class="editor out" tabindex="0" aria-label="Output">
+      <pre class="gutter" aria-hidden="true">{{ range(1, lines + 1) | join("\n") }}</pre>
+      <pre id="out" class="hl">{% if result.html %}{{ result.html }}{% else %}{{ result.output }}{% endif %}</pre>
+    </div>
+    <footer class="panel-foot is-ok" id="out-status" hx-swap-oob="true">
+      {%- for n in result.notes %}<span>{{ n }}</span> · {% endfor -%}
+      {{ '{:,}'.format(lines) }} line{{ 's' if lines != 1 }} · {{ '{:,}'.format(result.output | length) }} chars</footer>
+  {% endif %}
+{% elif error %}
   <div class="error" role="alert">{{ error }}</div>
 {% elif result %}
   {% for n in result.notes %}<div class="note">{{ n }}</div>{% endfor %}
