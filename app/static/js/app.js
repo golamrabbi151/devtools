@@ -218,8 +218,10 @@
 
     const textarea = () => $("textarea", pane);
     const backdrop = () => $(".ed-backdrop", pane);
-    const root = () => (isInput ? backdrop() : $("#out", pane));
-    const scroller = () => (isInput ? textarea() : $(".editor.out", pane));
+    // output: the code pane (#out), or the JSON-compare differences table; a hidden #out (plain-text copy
+    // kept for Copy report) is never searched
+    const root = () => (isInput ? backdrop() : $(".diff-wrap", pane) || $("#out:not([hidden])", pane));
+    const scroller = () => (isInput ? textarea() : $(".diff-wrap", pane) || $(".editor.out", pane));
 
     function syncBackdrop() {
       const ta = textarea(), bd = backdrop();

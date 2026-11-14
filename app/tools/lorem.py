@@ -63,5 +63,5 @@ register(Tool(
         Field("classic", "Start with “Lorem ipsum dolor sit amet…”", "checkbox", default="on"),
     ),
     actions=(Action("generate", "Generate", True),),
-    handler=handler, group="Generators",
+    handler=handler, group="Generators", wrap=True,
 ))

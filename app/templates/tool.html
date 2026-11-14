@@ -72,23 +72,29 @@
         <span id="spinner" class="htmx-indicator">Working…</span>
       </div>
       {% endif %}
-      <section class="panel">
+      <section class="panel" data-find-pane data-find-source="input">
         <header class="panel-head">
           <h2>{{ f.label }}</h2>
           <div class="head-tools">
             {{ open_file(f, tool) }}
             <button type="button" class="tool-btn" data-clear-field="#f-{{ f.name }}">Clear</button>
+            <button type="button" class="tool-btn" data-find-open title="Search (Ctrl+F)">Search</button>
           </div>
         </header>
+        {{ search_bar(f.label | lower) }}
         {{ editor(f) }}
       </section>
     {% endfor %}
   </div>
-  <section class="panel result-panel" aria-live="polite">
+  <section class="panel result-panel" data-find-pane data-find-source="output" aria-live="polite">
     <header class="panel-head">
       <h2>Differences</h2>
-      <div class="head-tools"><button type="button" class="tool-btn" data-copy="#out">Copy report</button></div>
+      <div class="head-tools">
+        <button type="button" class="tool-btn" data-copy="#out">Copy report</button>
+        <button type="button" class="tool-btn" data-find-open title="Search (Ctrl+F)">Search</button>
+      </div>
     </header>
+    {{ search_bar("differences") }}
     <div id="result" class="result"><p class="muted pad">Click <strong>Compare</strong> to see added, removed and changed values.</p></div>
   </section>
 
@@ -128,8 +134,9 @@
       <span id="spinner" class="htmx-indicator">Working…</span>
     </div>
   </div>
-  <section class="pane" aria-live="polite">
+  <section class="pane" data-find-pane data-find-source="output" aria-live="polite">
     <label>Result</label>
+    {{ search_bar("result") }}
     <div id="result"><p class="muted">Output appears here.</p></div>
   </section>
 {% endif %}

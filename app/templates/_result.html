@@ -26,13 +26,15 @@
     {% if result.output %}<pre id="out" class="sr-only" hidden>{{ result.output }}</pre>{% endif %}
   {% elif result.output %}
     {% set lines = [result.output.count("\n") + 1, 20000] | min %}
+    {% set wrap = tool is defined and tool and tool.wrap %}
     <div class="out-bar">
       <button type="button" class="tool-btn" data-copy="#out">Copy</button>
       <button type="button" class="tool-btn" data-download="#out" data-filename="result.{{ ext }}">Download</button>
+      <button type="button" class="tool-btn" data-find-open title="Search (Ctrl+F)">Search</button>
       <span class="muted small">{{ lines }} line{{ 's' if lines != 1 }} · {{ '{:,}'.format(result.output | length) }} chars</span>
     </div>
-    <div class="editor out">
-      <pre class="gutter" aria-hidden="true">{{ range(1, lines + 1) | join("\n") }}</pre>
+    <div class="editor out{{ ' wrap' if wrap }}" tabindex="0" aria-label="Output">
+      {% if not wrap %}<pre class="gutter" aria-hidden="true">{{ range(1, lines + 1) | join("\n") }}</pre>{% endif %}
       <pre id="out" class="hl">{% if result.html %}{{ result.html }}{% else %}{{ result.output }}{% endif %}</pre>
     </div>
   {% endif %}

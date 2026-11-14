@@ -351,6 +351,22 @@ def test_split_panes_share_structure_and_have_search(client):
         assert page.count('class="panel-foot"') == 2 and 'class="ed-backdrop"' in page, slug
 
 
+def test_lorem_output_wraps_without_gutter(run):
+    t = run("lorem-ipsum").get_data(as_text=True)
+    assert 'class="editor out wrap"' in t and 'class="gutter"' not in t and 'data-find-open' in t
+
+
+def test_compare_and_form_tools_have_search(client, run):
+    page = client.get("/tool/json-compare").get_data(as_text=True)
+    assert page.count("data-find-bar") == 3                                # left, right, differences
+    assert page.count('data-find-source="input"') == 2 and page.count('data-find-source="output"') == 1
+    for slug in ("excel-json", "excel-sql", "lorem-ipsum"):
+        page = client.get(f"/tool/{slug}").get_data(as_text=True)
+        assert 'data-find-pane data-find-source="output"' in page and "data-find-bar" in page, slug
+    t = run("uuid").get_data(as_text=True)                                 # any text result: Search button, gutter kept
+    assert "data-find-open" in t and 'class="gutter"' in t
+
+
 def test_split_result_updates_status_bar(run):
     t = run("json-format", input='{"a": [1, 2]}', action="format", indent="2").get_data(as_text=True)
     assert 'id="out-status" hx-swap-oob="true"' in t and "6 lines" in t and "out-bar" not in t
