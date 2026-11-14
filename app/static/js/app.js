@@ -88,6 +88,7 @@
     const big = $("img", lightbox);
     big.src = img.src;
     big.alt = img.alt;
+    big.classList.toggle("smooth", !!img.closest('[data-tool="image-convert"]'));   // photos: no pixel-art scaling
     lightbox.showModal();
   }
   document.addEventListener("keydown", (e) => {

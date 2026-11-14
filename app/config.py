@@ -23,6 +23,7 @@ class Config:
         "base64-image": _limit_mb("UPLOAD_MB_BASE64_IMAGE", 5),   # Base64 image             5 MB
         "certificate":  _limit_mb("UPLOAD_MB_CERTIFICATE", 2),    # Certificate decoder      2 MB
         "qr-code":      _limit_mb("UPLOAD_MB_QR_CODE", 2),        # QR code reader           2 MB
+        "image-convert": _limit_mb("UPLOAD_MB_IMAGE_CONVERT", 10),  # Image converter         10 MB
     }
     MAX_UPLOAD_BYTES = _limit_mb("UPLOAD_MB_DEFAULT", 2)          # any other file field
     REQUEST_SLACK = 1 * MB                      # allowance for form fields / multipart overhead

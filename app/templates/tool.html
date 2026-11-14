@@ -7,7 +7,7 @@
   <p class="muted">{{ tool.description }}</p>
 </div>
 
-<form id="tool-form" class="tool-form lay-{{ tool.layout }}" method="post"
+<form id="tool-form" class="tool-form lay-{{ tool.layout }}" data-tool="{{ tool.slug }}" method="post"
       hx-post="{{ url_for('main.tool_run', slug=tool.slug) }}"
       hx-target="#result" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-indicator="#spinner"
       {%- if tool.live %} hx-trigger="submit, load, input changed delay:600ms from:#f-{{ tool.live }}"{% endif %}>

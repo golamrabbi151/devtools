@@ -182,7 +182,10 @@ pre { background: var(--panel); color: var(--ink); border: 1px solid var(--borde
 .compare-grid { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 16px; }
 .compare-mid { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding-top: 56px; }
 .compare-mid .opt { flex-wrap: wrap; font-size: 12.5px; }
-.compare-grid .editor { height: min(48vh, 420px); }
+.compare-grid .editor {  height: 70vh;
+    min-height: 70vh;
+    box-sizing: border-box;
+}
 .diff-summary { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; }
 .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .d-add { background: #dcf3e2; color: #14532d; } .d-del { background: #fde2e2; color: #8f1d1d; } .d-chg { background: #fdf0c8; color: #6b4300; }
@@ -526,3 +529,10 @@ a.btn.primary:hover { background: var(--brand-dark); border-color: var(--brand-d
   .bd-nav { display: none; }
   .bd-card { flex-basis: 82%; }
 }
+
+/* ---------- image converter result ---------- */
+.img-out { margin: 4px 0 12px; }
+.img-out a.btn { padding: 10px 18px; font-size: 15px; }
+/* converted photos are scaled smoothly (pixelated scaling is for QR codes / icons) */
+[data-tool="image-convert"] .preview, .lightbox img.smooth { image-rendering: auto; }
+[data-tool="image-convert"] .preview { background: repeating-conic-gradient(#eef4e8 0 25%, #fff 0 50%) 0 0 / 20px 20px; }

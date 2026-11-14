@@ -157,7 +157,30 @@ def detect_image(data: bytes) -> str | None:
         return "GIF"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "WEBP"
+    if data[:2] == b"BM" and len(data) >= 26:
+        return "BMP"
+    if data[4:8] == b"ftyp" and data[8:12] in (b"avif", b"avis"):
+        return "AVIF"
     return None
+
+
+def _bmff_exact(data: bytes) -> bool:
+    """ISO-BMFF (AVIF): the top-level boxes must cover the file exactly - nothing appended."""
+    pos, n = 0, len(data)
+    while pos < n:
+        if pos + 8 > n:
+            return False
+        size = int.from_bytes(data[pos:pos + 4], "big")
+        if size == 1:                                   # 64-bit "largesize"
+            if pos + 16 > n:
+                return False
+            size = int.from_bytes(data[pos + 8:pos + 16], "big")
+        elif size == 0:                                 # last box runs to the end of the file
+            return True
+        if size < 8:
+            return False
+        pos += size
+    return pos == n
 
 
 def validate_image(data: bytes) -> str:
@@ -166,12 +189,14 @@ def validate_image(data: bytes) -> str:
     fmt = detect_image(data)
     if fmt is None:
         _reject_dangerous(data, "an image")
-        raise ToolError("Rejected: not a PNG, JPEG, GIF or WebP image.")
+        raise ToolError("Rejected: not a PNG, JPEG, GIF, WebP, BMP or AVIF image.")
     tail_ok = {
         "PNG": data.endswith(_PNG_END),
         "JPEG": data.rstrip(b"\x00").endswith(b"\xff\xd9"),
         "GIF": data.rstrip(b"\x00").endswith(b";"),
         "WEBP": len(data) in (int.from_bytes(data[4:8], "little") + 8, int.from_bytes(data[4:8], "little") + 9),
+        "BMP": 0 <= len(data) - int.from_bytes(data[2:6], "little") <= 3,   # declared size (+ tiny padding)
+        "AVIF": _bmff_exact(data),
     }[fmt]
     if not tail_ok:
         raise ToolError("Rejected: the image contains extra data after its end (possible hidden payload) "

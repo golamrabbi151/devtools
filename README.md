@@ -16,6 +16,7 @@ A DevToys-style toolbox as a web app: **Flask + HTMX**, no front-end build step.
 | JWT | decode, verify HS256/384/512, encode + sign |
 | Excel to JSON | `.xlsx` → JSON (all sheets or one), header row, hidden-sheet option; values only, formulas never evaluated |
 | Excel to SQL | `.xlsx` → `CREATE TABLE` + `INSERT` for MySQL, PostgreSQL, SQL Server or SQLite; inferred column types, batched multi-row inserts, escaped literals (never executed) |
+| Image Converter | PNG / JPEG / GIF / WebP / BMP / AVIF → JPG, PNG, WebP, AVIF, GIF, BMP, TIFF or ICO; quality, resize (keeps aspect ratio), lossless WebP/AVIF, background colour for transparency; EXIF/GPS metadata removed, phone rotation applied |
 | Lorem Ipsum | paragraphs / sentences / words, optional classic opening |
 | Password Generator | CSPRNG (`secrets`), length 4–128, character sets, look-alike & custom exclusions, entropy estimate |
 | UUID Generator | v4, v7, v5, v3, nil, max; formatting options; UUID inspector |
@@ -128,6 +129,7 @@ Limits live in `app/config.py` (`UPLOAD_LIMITS`) and can be overridden per deplo
 | Base64 Image | **5 MB** | `UPLOAD_MB_BASE64_IMAGE` |
 | Certificate Decoder | **2 MB** | `UPLOAD_MB_CERTIFICATE` |
 | QR Code | **2 MB** | `UPLOAD_MB_QR_CODE` |
+| Image Converter | **10 MB** | `UPLOAD_MB_IMAGE_CONVERT` |
 | any other file field | 2 MB | `UPLOAD_MB_DEFAULT` |
 
 Enforced three ways: the browser warns instantly; the request body is capped *before* parsing (`413`); and the file is re-measured server-side with a friendly message.
