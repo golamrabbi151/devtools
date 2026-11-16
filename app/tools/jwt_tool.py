@@ -107,5 +107,5 @@ register(Tool(
         Field("secret", "Secret (sign / verify)", "text", max_len=1000),
     ),
     actions=(Action("decode", "Decode", True), Action("encode", "Encode")),
-    handler=handler, group="Encoders / Decoders",
+    handler=handler, group="Encoders / Decoders", wrap="code",
 ))

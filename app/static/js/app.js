@@ -169,6 +169,151 @@
     reader.readAsText(file);
   });
 
+  /* ---------- code folding in output panes (JSON / SQL / XML / Excel results) ----------
+     The highlighted <pre id="out"> is split into one block per line (each keeps its "\n" in a hidden span,
+     so textContent - used by Copy, Download and search - is unchanged). Fold regions follow indentation:
+     a line followed by more-indented lines can be folded; the closing bracket line stays visible. */
+  const FOLD_MAX_LINES = 20000;
+  const foldState = new WeakMap();                          // pre#out -> { lines, rows, regions, folded:Set }
+
+  function splitLines(pre) {
+    const lines = [];
+    let cur = document.createElement("span");
+    const newLine = () => { cur.className = "ln"; lines.push(cur); cur = document.createElement("span"); };
+    const walk = (node, wrap) => {
+      for (const child of Array.from(node.childNodes)) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const parts = child.nodeValue.split("\n");
+          parts.forEach((part, i) => {
+            if (part) cur.appendChild(wrap(document.createTextNode(part)));
+            if (i < parts.length - 1) {
+              const nl = document.createElement("span");
+              nl.className = "nl";
+              nl.textContent = "\n";
+              cur.appendChild(nl);
+              newLine();
+            }
+          });
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          // re-create the highlighting span around every piece that lands on a line
+          walk(child, (n) => { const c = child.cloneNode(false); c.appendChild(n); return wrap(c); });
+        }
+      }
+    };
+    walk(pre, (n) => n);
+    newLine();
+    return lines;
+  }
+
+  function foldRegions(texts) {
+    const indent = texts.map((t) => (t.trim() ? t.length - t.trimStart().length : -1));   // -1 = blank line
+    const regions = new Map();                              // start line -> last hidden line
+    for (let i = 0; i < texts.length; i++) {
+      if (indent[i] < 0) continue;
+      let end = i;
+      for (let j = i + 1; j < texts.length; j++) {
+        if (indent[j] < 0) continue;
+        if (indent[j] > indent[i]) end = j; else break;
+      }
+      if (end > i) regions.set(i, end);
+    }
+    return regions;
+  }
+
+  function applyFolds(st) {
+    let hideUntil = -1;
+    st.lines.forEach((ln, i) => {
+      const hidden = i <= hideUntil;
+      ln.classList.toggle("fold-hidden", hidden);
+      st.rows[i].classList.toggle("fold-hidden", hidden);
+      const folded = !hidden && st.folded.has(i);
+      ln.classList.toggle("folded", folded);
+      const btn = st.rows[i].querySelector(".g-fold");
+      if (btn) {
+        const open = !st.folded.has(i);
+        btn.setAttribute("aria-expanded", String(open));
+      }
+      if (folded) hideUntil = Math.max(hideUntil, st.regions.get(i));
+    });
+  }
+
+  function enableFolding(box) {
+    const pre = $("#out", box), gutter = $(".gutter", box);
+    if (!pre || !gutter || box.classList.contains("wrap") || foldState.has(pre)) return;
+    if ((pre.textContent.match(/\n/g) || []).length >= FOLD_MAX_LINES) return;   // huge output: plain view
+    const lines = splitLines(pre);
+    const regions = foldRegions(lines.map((l) => l.textContent.replace(/\n$/, "")));
+    pre.replaceChildren(...lines);
+    const rows = lines.map((ln, i) => {
+      const row = document.createElement("span");
+      row.className = "g-row";
+      row.textContent = String(i + 1);
+      if (regions.has(i)) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "g-fold";
+        btn.dataset.line = String(i);
+        btn.setAttribute("aria-expanded", "true");
+        btn.setAttribute("aria-label", `Fold lines ${i + 2}-${regions.get(i) + 1}`);
+        row.appendChild(btn);                               // chevron is drawn by CSS
+        ln.dataset.foldN = String(regions.get(i) - i);
+      }
+      return row;
+    });
+    gutter.replaceChildren(...rows);
+    box.classList.add("foldable");
+    foldState.set(pre, { lines, rows, regions, folded: new Set() });
+  }
+
+  function toggleFold(pre, i, fold) {
+    const st = foldState.get(pre);
+    if (!st || !st.regions.has(i)) return;
+    if (fold === undefined) fold = !st.folded.has(i);
+    if (fold) st.folded.add(i); else st.folded.delete(i);
+    applyFolds(st);
+  }
+
+  // Search jumped to a match inside a folded region: unfold every region that hides that line.
+  function foldReveal(node) {
+    const ln = node && (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest(".ln");
+    const pre = ln && ln.closest("pre");
+    const st = pre && foldState.get(pre);
+    if (!st || !ln.classList.contains("fold-hidden")) return;
+    const idx = st.lines.indexOf(ln);
+    for (const start of Array.from(st.folded)) {
+      if (start < idx && st.regions.get(start) >= idx) st.folded.delete(start);
+    }
+    applyFolds(st);
+  }
+
+  document.addEventListener("click", (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t) return;
+    const btn = t.closest(".g-fold");
+    if (btn) {
+      toggleFold($("#out", btn.closest(".editor.out")), Number(btn.dataset.line));
+      return;
+    }
+    const folded = t.closest(".hl .ln.folded");               // click the "… n lines" badge / folded line
+    if (folded) {
+      const pre = folded.closest("pre"), st = foldState.get(pre);
+      if (st) toggleFold(pre, st.lines.indexOf(folded), false);
+      return;
+    }
+    const all = t.closest("[data-fold-all], [data-unfold-all]");
+    if (all) {
+      const pre = $("#out", all.closest("section") || document);
+      const st = pre && foldState.get(pre);
+      if (!st) return;
+      st.folded = all.hasAttribute("data-fold-all") ? new Set(st.regions.keys()) : new Set();
+      applyFolds(st);
+    }
+  });
+  // registered before the find-in-pane listener below, so a re-run search sees the per-line structure
+  document.body.addEventListener("htmx:afterSwap", (e) => {
+    if (e.target && e.target.id === "result") $$(".editor.out", e.target).forEach(enableFolding);
+  });
+
   /* ---------- find in pane (input textarea / output code), like an editor's Ctrl+F ----------
      Matches are highlighted with the CSS Custom Highlight API (Range objects, no DOM rewriting).
      The textarea is searched through .ed-backdrop: a transparent copy of its text drawn underneath it.
@@ -271,6 +416,7 @@
     function scrollToCurrent() {
       const r = f.ranges[f.index], box = scroller();
       if (!r || !box) return;
+      if (!isInput) foldReveal(r.startContainer);            // match inside a folded region: open it first
       const rect = r.getBoundingClientRect(), view = box.getBoundingClientRect();
       const gutter = isInput ? 0 : (($(".gutter", box) || {}).offsetWidth || 0);
       const top = rect.top - view.top, left = rect.left - view.left;

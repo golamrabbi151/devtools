@@ -353,7 +353,14 @@ def test_split_panes_share_structure_and_have_search(client):
 
 def test_lorem_output_wraps_without_gutter(run):
     t = run("lorem-ipsum").get_data(as_text=True)
-    assert 'class="editor out wrap"' in t and 'class="gutter"' not in t and 'data-find-open' in t
+    assert 'class="editor out wrap wrap-text"' in t and 'class="gutter"' not in t and 'data-find-open' in t
+
+
+def test_base64_and_jwt_outputs_wrap_as_code(run):
+    for slug, data in (("base64-text", {"input": "x" * 500, "action": "encode"}),
+                       ("jwt", {"action": "encode", "payload": '{"sub": "1"}', "secret": "s" * 32})):
+        t = run(slug, **data).get_data(as_text=True)
+        assert 'class="editor out wrap wrap-code"' in t and 'class="gutter"' not in t, slug
 
 
 def test_compare_and_form_tools_have_search(client, run):
@@ -365,6 +372,13 @@ def test_compare_and_form_tools_have_search(client, run):
         assert 'data-find-pane data-find-source="output"' in page and "data-find-bar" in page, slug
     t = run("uuid").get_data(as_text=True)                                 # any text result: Search button, gutter kept
     assert "data-find-open" in t and 'class="gutter"' in t
+
+
+def test_fold_controls_on_code_outputs_only(client, run):
+    page = client.get("/tool/json-format").get_data(as_text=True)
+    assert "data-fold-all" in page and "data-unfold-all" in page
+    assert "data-fold-all" in run("uuid").get_data(as_text=True)           # form-layout code output
+    assert "data-fold-all" not in run("lorem-ipsum").get_data(as_text=True)  # prose output: no folding
 
 
 def test_split_result_updates_status_bar(run):

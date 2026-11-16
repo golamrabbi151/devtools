@@ -31,9 +31,13 @@
       <button type="button" class="tool-btn" data-copy="#out">Copy</button>
       <button type="button" class="tool-btn" data-download="#out" data-filename="result.{{ ext }}">Download</button>
       <button type="button" class="tool-btn" data-find-open title="Search (Ctrl+F)">Search</button>
+      {% if not wrap %}
+      <button type="button" class="tool-btn icon" data-fold-all title="Collapse all" aria-label="Collapse all">⊟</button>
+      <button type="button" class="tool-btn icon" data-unfold-all title="Expand all" aria-label="Expand all">⊞</button>
+      {% endif %}
       <span class="muted small">{{ lines }} line{{ 's' if lines != 1 }} · {{ '{:,}'.format(result.output | length) }} chars</span>
     </div>
-    <div class="editor out{{ ' wrap' if wrap }}" tabindex="0" aria-label="Output">
+    <div class="editor out{{ ' wrap wrap-' ~ tool.wrap if wrap }}" tabindex="0" aria-label="Output">
       {% if not wrap %}<pre class="gutter" aria-hidden="true">{{ range(1, lines + 1) | join("\n") }}</pre>{% endif %}
       <pre id="out" class="hl">{% if result.html %}{{ result.html }}{% else %}{{ result.output }}{% endif %}</pre>
     </div>

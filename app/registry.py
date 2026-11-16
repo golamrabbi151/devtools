@@ -59,7 +59,8 @@ class Tool:
     sample: dict | None = None        # {field_name: sample text} for the Sample button
     presets: tuple = ()               # ((label, value), ...) quick-pick chips (cron)
     live: str = ""                    # field name that re-runs the tool as the user types
-    wrap: bool = False                # output is prose: wrap long lines inside the box (no line-number gutter)
+    wrap: str = ""                    # wrap output inside the box (no gutter / folding): "text" = prose font,
+                                      # "code" = monospace, breaks inside long tokens (Base64, JWT)
     rate: str = "30 per minute"       # per-IP rate limit for the run endpoint
 
 

@@ -46,5 +46,5 @@ register(Tool(
         Field("pad", "Padding on encode", "select", (("on", "Keep '='"), ("off", "Strip '='")), "on"),
     ),
     actions=(Action("encode", "Encode", True), Action("decode", "Decode")),
-    handler=handler, group="Encoders / Decoders",
+    handler=handler, group="Encoders / Decoders", wrap="code",
 ))

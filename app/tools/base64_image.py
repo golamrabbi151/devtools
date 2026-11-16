@@ -58,5 +58,5 @@ register(Tool(
         Field("input", "Base64 to decode (raw or data: URI)"),
     ),
     actions=(Action("encode", "Encode image", True), Action("decode", "Decode to image")),
-    handler=handler, group="Encoders / Decoders",
+    handler=handler, group="Encoders / Decoders", wrap="code",
 ))
